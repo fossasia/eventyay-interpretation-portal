@@ -55,7 +55,7 @@ MediaStream (audio-only; never connected to AudioContext.destination)
        peerConnection.setRemoteDescription(answer)
        │
        ▼
-       ICE candidate exchange (embedded in SDP / trickle ICE)
+       ICE candidates exchanged via SDP
        │
        ▼
        RTP stream (Opus codec) → server-side aiortc peer connection

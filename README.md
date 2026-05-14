@@ -10,7 +10,7 @@ It is built as an Eventyay-native subsystem. The portal feeds the Eventyay viewe
 
 This repository contains:
 
-- **The interpreter console** — a single-tab Vue 3 application where an interpreter monitors the floor session (via an embedded Jitsi frame) and broadcasts their spoken translation (via browser WebRTC mic capture → ingest API).
+- **The interpreter console** — a single-tab browser console where an interpreter monitors the floor session (via an embedded Jitsi frame) and broadcasts their spoken translation (via browser WebRTC mic capture → ingest API).
 - **The booth coordination layer** — a Flask + Socket.IO server that tracks participant roles (active interpreter, backup, coordinator, listener), enforces single-publisher-per-channel rules, handles handoffs, and runs internal booth chat.
 - **The ingest bridge** — an `aiortc`-powered endpoint that accepts WebRTC SDP offers from the interpreter's browser, terminates the audio connection server-side, and hands audio to FFmpeg for HLS segmentation.
 
@@ -90,7 +90,7 @@ npm install
 npm run dev
 ```
 
-Vite dev server starts at `http://localhost:5173`.
+Vite dev server starts at `http://localhost:5174`.
 
 ### Open an interpreter booth
 
@@ -193,13 +193,8 @@ Tests cover booth state, participant role enforcement, ingest API boundaries, an
 
 ## Contributing
 
-See [AGENTS.md](AGENTS.md) for implementation guardrails and agent-specific instructions.
+See [agents.md](agents.md) for implementation guardrails and agent-specific instructions.
 See [docs/setup/local-development.md](docs/setup/local-development.md) for the full environment setup.
-
-- `JITSI_DOMAIN` - allowed Jitsi hostname for iframe validation.
-- `INGEST_HLS_ROOT` - local HLS output directory.
-- `HLS_SEGMENT_SECONDS` - FFmpeg HLS segment length.
-- `HLS_PLAYLIST_LENGTH` - HLS playlist window.
 
 ## Tests
 

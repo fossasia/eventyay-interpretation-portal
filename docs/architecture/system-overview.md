@@ -108,7 +108,7 @@
 Speaker → Jitsi meeting → Jitsi iframe in interpreter console → interpreter's ears
 ```
 
-The Jitsi iframe loads with `startWithAudioMuted=false` (it plays floor audio) but `startWithVideoMuted=true` and `disableInitialGUM=true` so the interpreter's mic/camera is never accidentally published into the Jitsi call.
+The Jitsi iframe loads with `startWithAudioMuted=true`, `startWithVideoMuted=true`, and `disableInitialGUM=true` so the interpreter's mic/camera is never accidentally published into the Jitsi call. Floor audio still plays from the meeting because `startWithAudioMuted` controls local participant mic mute state, not remote audio playback.
 
 ### Ingest path (WebRTC → HLS)
 

@@ -232,7 +232,7 @@ Provides the Eventyay-style page shell: meta tags, CSS imports, and a `{% block 
 
 ### `templates/interpreter_booth.html`
 
-Extends `base.html`. Renders a `<div id="app">` where Vue mounts. Passes server-side config to Vue via `<script>` data attributes or a JSON config object:
+Extends `base.html`. Renders a `<div id="interpreter-portal">` with `data-*` attributes consumed by the current static booth script (`static/js/interpreter-booth.js`):
 
 - `booth_id`, `booth_token`, `booth_language`, `booth_channel_id`
 - `default_jitsi_room`, `jitsi_domain`

@@ -82,7 +82,9 @@ npm install
 npm run dev
 ```
 
-Vite starts at `http://localhost:5173`. API requests are proxied to Flask at `http://127.0.0.1:5000`.
+Vite starts at `http://localhost:5174`.
+
+The dev server is not currently configured to proxy API requests to Flask. Keep Flask running on `http://127.0.0.1:5000` and point backend requests there directly.
 
 ### 3. Build for production
 
@@ -90,7 +92,9 @@ Vite starts at `http://localhost:5173`. API requests are proxied to Flask at `ht
 npm run build
 ```
 
-Output goes to `static/dist/`. Flask serves this in production.
+Output goes to `dist/` at the repository root (Vite default).
+
+The current Flask booth template serves `static/js/interpreter-booth.js`; it does not yet load a Vite manifest bundle directly.
 
 ---
 
@@ -105,7 +109,7 @@ http://127.0.0.1:5000/interpreter/hall-a-fr?language=French
 Or via the Vite dev server:
 
 ```
-http://localhost:5173/interpreter/demo-event/hall-a-fr
+http://localhost:5174/interpreter/demo-event/hall-a-fr
 ```
 
 To test multi-user booth behaviour, open multiple tabs:

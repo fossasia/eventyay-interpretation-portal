@@ -1,6 +1,8 @@
 # Frontend Architecture
 
-The frontend is a Vue 3 single-page application built with Vite. It is served from Flask in production and from the Vite dev server during development.
+The frontend under `src/` is a Vue 3 single-page application built with Vite.
+
+Today, the Flask-rendered interpreter booth route still serves `static/js/interpreter-booth.js`. The Vue app can be run through the Vite dev server (and built to `dist/`) while integration of that bundle into Flask templates is still pending.
 
 ---
 
@@ -11,7 +13,8 @@ The frontend is a Vue 3 single-page application built with Vite. It is served fr
 | Vue 3 | 3.x | Component framework (Composition API) |
 | Vite | 5.x | Build tool and dev server |
 | Vue Router | 4.x | Client-side routing |
-| Socket.IO client | 4.x | Realtime booth communication |
+| BroadcastChannel API (native) | — | Cross-tab booth communication |
+| WebSocket API (native) | — | Optional multi-machine booth communication |
 | WebRTC (native browser API) | — | Microphone ingest |
 | Web Audio API (native) | — | Level meter |
 | BroadcastChannel API (native) | — | Cross-tab coordination |
@@ -55,10 +58,10 @@ src/
 
 ## Routing
 
-The console has a single route:
+The console has a primary route:
 
 ```
-/interpreter/:eventSlug/:boothId
+/interpreter/:eventSlug?/:boothId?
 ```
 
 Route params are read by `InterpreterConsoleView` on mount and passed to `useInterpreterBooth.initialize({ eventSlug, boothId })`.
@@ -250,16 +253,16 @@ Set in `.env` with the `VITE_` prefix:
 
 | Variable | Default | Description |
 |---|---|---|
-| `VITE_INGEST_BASE_URL` | `http://127.0.0.1:5000` | Base URL of the ingest API |
+| `VITE_INGEST_BASE_URL` | _(empty)_ | Base URL of the ingest API |
 | `VITE_INGEST_AUTH_TOKEN` | _(empty)_ | Bearer token for ingest API auth |
 | `VITE_BOOTH_WS_URL` | _(empty)_ | WebSocket URL for booth realtime (optional) |
-| `VITE_STUN_SERVERS` | `stun:stun.l.google.com:19302` | STUN server(s) for ICE |
-| `VITE_JITSI_DOMAIN` | `meet.jit.si` | Expected Jitsi domain for URL validation |
-| `VITE_DEFAULT_JITSI_URL` | `https://meet.jit.si/eventyay-stage-room` | Default monitoring room |
-| `VITE_DEFAULT_EVENT_SLUG` | `demo-event` | Default event slug for dev |
-| `VITE_DEFAULT_BOOTH_ID` | `demo-booth` | Default booth ID for dev |
-| `VITE_DEFAULT_LANGUAGE` | `English` | Default language label |
-| `VITE_DEFAULT_CHANNEL_ID` | `demo-booth-audio` | Default channel ID |
+| `VITE_STUN_SERVERS` | _(empty)_ | Comma-separated STUN server list for ICE |
+| `VITE_JITSI_DOMAIN` | _(empty)_ | Expected Jitsi domain for URL validation |
+| `VITE_JITSI_DEFAULT_URL` | _(empty)_ | Default monitoring room URL |
+| `VITE_DEFAULT_EVENT_SLUG` | `sample-event` | Default event slug for dev |
+| `VITE_DEFAULT_BOOTH_ID` | `booth-a` | Default booth ID for dev |
+| `VITE_DEFAULT_LANGUAGE_LABEL` | `English` | Default language label |
+| `VITE_DEFAULT_CHANNEL_ID` | `en-main` | Default channel ID |
 
 ---
 
@@ -267,9 +270,9 @@ Set in `.env` with the `VITE_` prefix:
 
 ```bash
 npm install
-npm run build    # outputs to static/dist/
+npm run build    # outputs to dist/
 ```
 
-The Vite build output is served by Flask as static files. The Flask template (`templates/interpreter_booth.html`) includes the Vite manifest entry point.
+The Vite build output is currently standalone (`dist/`). The Flask template (`templates/interpreter_booth.html`) still references `static/js/interpreter-booth.js` and does not yet load a Vite manifest entry.
 
-For development, run both the Flask server and the Vite dev server in parallel. The Vite dev server proxies API requests to Flask.
+For development, run both the Flask server and the Vite dev server in parallel. The Vite dev server is not currently configured with a Flask API proxy.

@@ -25,7 +25,7 @@ const JITSI_EMBED_CONFIG = {
   'config.startWithAudioMuted': 'true',
   'config.startWithVideoMuted': 'true',
   'config.prejoinPageEnabled': 'false',
-  'config.disableInitialGUM': 'false',
+  'config.disableInitialGUM': 'true',
   'config.startSilent': 'true'   // start muted
 }
 ```

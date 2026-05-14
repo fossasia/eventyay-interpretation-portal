@@ -92,7 +92,7 @@ These scenarios require a browser and both the Flask server and Vite dev server 
 
 **Setup:** Flask + Vite running. `aiortc_available = True`.
 
-1. Open `http://localhost:5173/interpreter/demo-event/hall-a-fr` (or the Flask URL).
+1. Open `http://localhost:5174/interpreter/demo-event/hall-a-fr` (or the Flask URL).
 2. Verify the console loads with all panels visible.
 3. Click **Join Monitor Room** — Jitsi iframe loads. Verify `monitoringActive` is checked.
 4. Click the headphones checkbox manually. Verify it toggles.
@@ -148,11 +148,13 @@ These scenarios require a browser and both the Flask server and Vite dev server 
 The CI pipeline (`.github/workflows/tests.yml`) runs:
 
 ```bash
-uv sync --python 3.13 --dev
-uv run pytest
+uv sync
+uv run pytest -v
 ```
 
-All tests must pass. There is no separate lint step currently; follow the code style of the surrounding files.
+The workflow currently runs on Python `3.11`.
+
+All tests must pass. CI does not currently run a frontend lint step, but the repository provides `npm run lint` for local validation.
 
 ---
 
