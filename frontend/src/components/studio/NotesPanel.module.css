@@ -1,0 +1,20 @@
+.panel { display: flex; flex-direction: column; height: 100%; }
+
+.header { display: flex; align-items: center; justify-content: space-between; padding: 14px 14px 8px; border-bottom: 1px solid var(--color-border); flex-shrink: 0; }
+.heading { font-size: 14px; font-weight: 600; }
+.timestamp { font-size: 11px; color: var(--color-text-muted); }
+
+.editor {
+  flex: 1;
+  width: 100%;
+  padding: 14px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  resize: none;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--color-text);
+  font-family: var(--font-sans);
+}
+.editor:focus { outline: none; }

@@ -1,12 +1,95 @@
+# =========================
+# Python
+# =========================
 .venv/
+venv/
+env/
+
 __pycache__/
-*.pyc
-*.pyo
+*.py[cod]
+*$py.class
+
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
-.DS_Store
-.env
-instance/
-hls-output/
+.coverage
+htmlcov/
+
+# Distribution
+build/
+dist/
 *.egg-info/
+.eggs/
+
+# =========================
+# Django
+# =========================
+*.log
+db.sqlite3
+db.sqlite3-journal
+
+media/
+staticfiles/
+
+instance/
+
+# Ignore local settings/env
+.env
+.env.*
+!.env.example
+
+# Migration cache only
+**/migrations/*.pyc
+**/migrations/__pycache__/
+
+# =========================
+# Node / React / Vite
+# =========================
+node_modules/
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+dist/
+.vite/
+
+# =========================
+# IDE
+# =========================
+.vscode/
+.idea/
+
+# =========================
+# macOS
+# =========================
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# =========================
+# Temporary files
+# =========================
+*.tmp
+*.swp
+*.swo
+*~
+
+# =========================
+# Project-specific
+# =========================
+hls-output/
+
+# generated media
+uploads/
+recordings/
+stream-output/
+
+# =========================
+# Keep these tracked
+# =========================
+!uv.lock
+!pyproject.toml
+!package.json
+!package-lock.json

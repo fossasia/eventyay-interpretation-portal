@@ -1,25 +1,89 @@
 version: 2
 
 updates:
-  # Python dependencies (uv / pyproject.toml)
+  # ---------------------------------------------------------------------------
+  # Python / uv (pyproject.toml)
+  # ---------------------------------------------------------------------------
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
       interval: "weekly"
+      day: "monday"
+      time: "09:00"
     open-pull-requests-limit: 10
     labels:
       - "dependencies"
       - "python"
     commit-message:
-      prefix: "deps"
+      prefix: "deps(python)"
+    groups:
+      django-ecosystem:
+        patterns:
+          - "django*"
+          - "daphne"
+          - "channels*"
+      allauth:
+        patterns:
+          - "django-allauth*"
+      drf:
+        patterns:
+          - "djangorestframework*"
+          - "django-cors-headers"
+    ignore:
+      # Major Django version upgrades require manual review
+      - dependency-name: "django"
+        update-types: ["version-update:semver-major"]
 
-  # GitHub Actions dependencies
+  # ---------------------------------------------------------------------------
+  # npm / Node.js (frontend/)
+  # ---------------------------------------------------------------------------
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "javascript"
+    commit-message:
+      prefix: "deps(npm)"
+    groups:
+      react:
+        patterns:
+          - "react"
+          - "react-dom"
+          - "@types/react"
+          - "@types/react-dom"
+      vite-build:
+        patterns:
+          - "vite"
+          - "@vitejs/*"
+          - "typescript"
+      eslint:
+        patterns:
+          - "eslint*"
+          - "@typescript-eslint/*"
+    ignore:
+      # Major React upgrades require manual review
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
+
+  # ---------------------------------------------------------------------------
+  # GitHub Actions
+  # ---------------------------------------------------------------------------
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+      day: "monday"
+      time: "09:00"
     labels:
       - "dependencies"
       - "github-actions"
     commit-message:
       prefix: "ci"
+    open-pull-requests-limit: 5

@@ -1,0 +1,95 @@
+.page { min-height: 100vh; background: var(--color-bg); }
+
+.header {
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  padding: 0 24px;
+  height: var(--topbar-height);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.logo { font-size: 18px; font-weight: 700; color: var(--color-accent); }
+
+.userBar { display: flex; align-items: center; gap: 12px; font-size: 13px; }
+
+.logoutBtn {
+  padding: 6px 12px;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  font-size: 13px;
+}
+.logoutBtn:hover { background: var(--color-border); }
+
+.main { max-width: 1100px; margin: 0 auto; padding: 32px 24px; }
+
+.titleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.titleRow h2 { font-size: 22px; font-weight: 600; }
+
+.createBtn {
+  background: var(--color-accent);
+  color: #fff;
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  font-weight: 500;
+}
+.createBtn:hover { background: var(--color-accent-hover); }
+
+.createForm {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  align-items: center;
+}
+
+.input { flex: 1; }
+
+.createSubmitBtn {
+  background: var(--color-accent);
+  color: #fff;
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  font-weight: 500;
+}
+.cancelBtn {
+  padding: 8px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+}
+
+.empty { color: var(--color-text-muted); margin-top: 48px; text-align: center; }
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.roomCard {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.roomCard:hover { border-color: var(--color-accent); }
+
+.roomName { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+.roomMeta { font-size: 12px; color: var(--color-text-muted); margin-bottom: 8px; }
+.roomDesc { font-size: 13px; color: var(--color-text-muted); margin-bottom: 12px; }
+
+.enterBtn {
+  font-size: 13px;
+  color: var(--color-accent);
+  font-weight: 500;
+}
+.enterBtn:hover { text-decoration: underline; }

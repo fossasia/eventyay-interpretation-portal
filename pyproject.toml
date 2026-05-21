@@ -1,24 +1,39 @@
 [project]
-name = "eventyay-interpretation-portal"
-version = "0.1.0"
-description = "Lightweight collaborative interpretation booth for Eventyay"
+name = "eventyay-studio"
+version = "0.2.0"
+description = "Eventyay Studio — browser-first live production platform"
 readme = "README.md"
 requires-python = ">=3.13,<3.14"
 dependencies = [
-    "Flask==3.1.3",
-    "Flask-SocketIO==5.6.1",
-    "aiortc==1.14.0",
-    "av==16.1.0",
-    "python-dotenv==1.2.2",
+    # Django core
+    "django>=5.1,<6",
+    "djangorestframework>=3.15,<4",
+    "django-cors-headers>=4.4,<5",
+    # Authentication
+    "django-allauth[socialaccount]>=65.0,<66",
+    # Realtime (WebSockets)
+    "channels>=4.1,<5",
+    "daphne>=4.1,<5",
+    # Channel layers (production: Redis; dev: in-memory via channels itself)
+    "channels-redis>=4.2,<5",
+    # Database
+    "psycopg2-binary>=2.9,<3",
+    # Utilities
+    "python-dotenv>=1.0,<2",
+    "Pillow>=11.0,<12",
 ]
 
 [dependency-groups]
 dev = [
-    "pytest==9.0.3",
+    "pytest>=8.2,<9",
+    "pytest-django>=4.9,<5",
+    "pytest-asyncio>=0.24,<1",
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["backend/tests"]
+DJANGO_SETTINGS_MODULE = "config.settings.development"
+pythonpath = ["backend"]
 
 [tool.uv]
 package = false

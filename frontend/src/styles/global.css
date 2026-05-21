@@ -1,0 +1,91 @@
+/* Design tokens — StreamYard/studio-inspired dark theme */
+:root {
+  --color-bg: #0f0f10;
+  --color-surface: #1a1a1d;
+  --color-surface-2: #242428;
+  --color-border: #2e2e34;
+  --color-accent: #6c63ff;
+  --color-accent-hover: #7c74ff;
+  --color-danger: #e74c3c;
+  --color-success: #2ecc71;
+  --color-warning: #f39c12;
+  --color-live: #e74c3c;
+
+  --color-text: #e8e8ec;
+  --color-text-muted: #888892;
+  --color-text-dim: #55555f;
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  --shadow-card: 0 2px 12px rgba(0, 0, 0, 0.4);
+
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+  --topbar-height: 56px;
+  --sidebar-width: 320px;
+  --backstage-height: 140px;
+}
+
+/* Light theme overrides — applied via data-theme="light" on <html> */
+[data-theme="light"] {
+  --color-bg: #f0f0f5;
+  --color-surface: #ffffff;
+  --color-surface-2: #e8e8f0;
+  --color-border: #c8c8d4;
+  --color-text: #18181c;
+  --color-text-muted: #5a5a68;
+  --color-text-dim: #9090a0;
+  --shadow-card: 0 2px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Reset */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root { height: 100%; }
+
+a { color: var(--color-accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+button {
+  cursor: pointer;
+  font: inherit;
+  border: none;
+  background: none;
+  color: inherit;
+}
+
+input, textarea, select {
+  font: inherit;
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+}
+
+input:focus, textarea:focus, select:focus {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.loading-spinner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--color-text-muted);
+  font-size: 16px;
+}

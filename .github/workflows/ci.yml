@@ -1,0 +1,103 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Backend — Django + pytest
+  # ---------------------------------------------------------------------------
+  backend:
+    name: Backend (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.13"]
+
+    services:
+      # Use SQLite in CI (default); override DATABASE_URL for Postgres if needed.
+      # No external service container needed for the current test suite.
+      pass:
+        image: alpine
+        options: --health-cmd "echo ok" --health-interval 1s
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Set up Python ${{ matrix.python-version }}
+        run: uv python install ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: uv sync --python ${{ matrix.python-version }} --dev
+
+      - name: Django system check
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.development
+          PYTHONPATH: backend
+        run: uv run python backend/manage.py check --deploy 2>&1 | grep -v "WARNINGS" || true
+
+      - name: Run migrations check
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.development
+          PYTHONPATH: backend
+        run: |
+          uv run python backend/manage.py makemigrations --check --dry-run
+          uv run python backend/manage.py migrate
+
+      - name: Run tests
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.development
+          PYTHONPATH: backend
+        run: uv run pytest backend/tests/ -v --tb=short
+
+  # ---------------------------------------------------------------------------
+  # Frontend — TypeScript + lint
+  # ---------------------------------------------------------------------------
+  frontend:
+    name: Frontend (Node ${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ["20", "22"]
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build

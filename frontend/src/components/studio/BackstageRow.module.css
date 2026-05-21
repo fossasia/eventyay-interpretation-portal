@@ -1,0 +1,214 @@
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 100%;
+  padding: 0 12px;
+  background: #0f0f12;
+  border-top: 1px solid #1e1e22;
+  overflow: hidden;
+}
+
+.label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  color: var(--color-text-dim);
+  text-transform: uppercase;
+  writing-mode: vertical-lr;
+  transform: rotate(180deg);
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  flex: 1;
+  height: 100%;
+  padding: 8px 0;
+  scrollbar-width: thin;
+}
+.strip::-webkit-scrollbar { height: 3px; }
+.strip::-webkit-scrollbar-thumb { background: #2a2a30; border-radius: 2px; }
+
+.empty { font-size: 12px; color: var(--color-text-dim); }
+
+/* ---- Card ---- */
+.card {
+  position: relative;
+  flex-shrink: 0;
+  width: 96px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  cursor: default;
+  border-radius: 8px;
+  overflow: visible;
+}
+/* Show hover overlay when hovering the card */
+.card:hover .overlay { opacity: 1; pointer-events: auto; }
+.onStage .thumb { border-color: var(--color-accent); }
+
+/* Video thumbnail area */
+.thumb {
+  position: relative;
+  width: 96px;
+  height: 72px;
+  border-radius: 8px 8px 0 0;
+  overflow: hidden;
+  border: 2px solid #282830;
+  border-bottom: none;
+  background: #141416;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color .15s;
+}
+.thumb img { width: 100%; height: 100%; object-fit: cover; }
+.initials {
+  font-size: 24px;
+  font-weight: 700;
+  color: #555;
+}
+.handBadge {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  font-size: 14px;
+  line-height: 1;
+}
+.stageDot {
+  position: absolute;
+  bottom: 3px;
+  right: 3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  border: 1.5px solid #141416;
+}
+
+/* Card footer — always visible: mic + name + menu dots */
+.cardFooter {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 5px;
+  background: #111116;
+  border: 1px solid #282830;
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  min-width: 0;
+}
+.micIcon {
+  font-size: 11px;
+  flex-shrink: 0;
+  opacity: 0.5;
+  line-height: 1;
+}
+.micActive { opacity: 1; filter: drop-shadow(0 0 4px #2ecc71); }
+.name {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+.menuDots {
+  font-size: 12px;
+  color: var(--color-text-dim);
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+/* Card with active audio source — green border */
+.audioActive .thumb {
+  border-color: var(--color-success);
+  box-shadow: 0 0 0 2px rgba(46, 204, 113, 0.25);
+}
+
+/* ---- Hover overlay — pops up OVER the card ---- */
+.overlay {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 108px;
+  background: rgba(10,10,14,.95);
+  border: 1px solid #2a2a32;
+  border-radius: 8px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .15s;
+  z-index: 200;
+}
+
+.stageBtn {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 4px;
+  width: 100%;
+  text-align: center;
+}
+.addStageBtn {
+  background: var(--color-accent);
+  color: #fff;
+}
+.addStageBtn:hover { background: var(--color-accent-hover); }
+.removeStageBtn {
+  background: rgba(231,76,60,.15);
+  border: 1px solid rgba(231,76,60,.3);
+  color: var(--color-danger);
+}
+.removeStageBtn:hover { background: rgba(231,76,60,.25); }
+
+.minorActions {
+  display: flex;
+  gap: 4px;
+}
+.minorActions button {
+  font-size: 12px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  background: #1e1e22;
+  color: var(--color-text-muted);
+}
+.minorActions button:hover { color: var(--color-text); background: #2a2a30; }
+.dangerBtn:hover { color: var(--color-danger) !important; }
+.audioActiveBtn { color: var(--color-success) !important; }
+.overlayActiveBtn { color: var(--color-accent) !important; }
+
+/* ---- "Present or invite" placeholder card ---- */
+.inviteCard {
+  flex-shrink: 0;
+  width: 96px;
+  height: 94px;   /* same total height as thumb+footer */
+  border-radius: 8px;
+  border: 2px dashed #2a2a32;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: var(--color-text-dim);
+  transition: border-color .12s, color .12s;
+  align-self: flex-start;
+  padding: 0;
+}
+.inviteCard:hover { border-color: var(--color-accent); color: var(--color-accent); }
+.inviteIcons { display: flex; gap: 4px; font-size: 18px; }
+.inviteIcon { font-size: 18px; line-height: 1; }
+.inviteLabel { font-size: 9px; text-transform: uppercase; letter-spacing: .05em; text-align: center; padding: 0 4px; }

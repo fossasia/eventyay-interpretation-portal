@@ -1,0 +1,240 @@
+.wrapper {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #0a0a0c;
+  overflow: hidden;
+}
+
+/* ---- Status badges ---- */
+.previewBadge,
+.liveBadge {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  z-index: 10;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+.previewBadge { background: #2a2a30; color: #888; border: 1px solid #3a3a42; }
+.liveBadge { background: var(--color-live); color: #fff; }
+
+/* ---- Stage canvas ---- */
+.stage {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* ---- Participant grid ---- */
+.grid {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  gap: 4px;
+  padding: 8px;
+  align-content: start;
+}
+.grid_grid        { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.grid_single      { grid-template-columns: 1fr; }
+.grid_side_by_side { grid-template-columns: repeat(2, 1fr); }
+.grid_presentation { grid-template-columns: 2fr 1fr; }
+
+/* ---- Individual tile ---- */
+.tile {
+  position: relative;
+  background: #141416;
+  border-radius: 8px;
+  border: 1px solid #222226;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 140px;
+}
+.tile:hover .tileActions { opacity: 1; }
+.spotlighted { border-color: var(--color-accent); box-shadow: 0 0 0 2px var(--color-accent); }
+.pinned { border-color: var(--color-warning); }
+
+.tileVideo {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0d0d0f;
+  min-height: 0;
+}
+.tileVideo img { width: 100%; height: 100%; object-fit: cover; }
+.tileInitials {
+  font-size: 28px;
+  font-weight: 700;
+  color: #555;
+  background: #1c1c20;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tileFooter {
+  padding: 4px 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(0,0,0,.5);
+  gap: 4px;
+  flex-shrink: 0;
+}
+.tileName { font-size: 12px; font-weight: 500; color: #ddd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tileBadges { display: flex; gap: 2px; font-size: 11px; }
+
+.tileActions {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px;
+  background: rgba(0,0,0,.7);
+  opacity: 0;
+  transition: opacity .15s;
+}
+.tileActions button {
+  font-size: 11px;
+  padding: 3px 7px;
+  border-radius: 4px;
+  background: rgba(255,255,255,.12);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,.15);
+  transition: background .12s;
+}
+.tileActions button:hover { background: rgba(255,255,255,.22); }
+.removeBtn { color: var(--color-danger) !important; }
+
+/* ---- Media frames ---- */
+.mediaFrame {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0a0a0c;
+}
+.pdfFrame,
+.youtubeFrame {
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+.imageViewer {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+.videoPlayer {
+  max-width: 100%;
+  max-height: 100%;
+  background: #000;
+}
+.mediaLabel {
+  position: absolute;
+  bottom: 8px;
+  left: 12px;
+  font-size: 11px;
+  color: rgba(255,255,255,.6);
+  background: rgba(0,0,0,.5);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+/* ---- Empty state ---- */
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--color-text-dim);
+  text-align: center;
+  padding: 24px;
+}
+.emptyIcon { font-size: 40px; }
+.hint { font-size: 12px; color: var(--color-text-dim); }
+
+/* ---- Generic placeholder ---- */
+.placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  height: 100%;
+  color: var(--color-text-dim);
+  font-size: 13px;
+  background: #0f0f12;
+  border-radius: 6px;
+}
+.placeholderIcon { font-size: 36px; }
+
+/* ---- Scene layouts ---- */
+.sceneSplit {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 4px;
+  width: 100%;
+  height: 100%;
+}
+.sceneLeft, .sceneRight { min-height: 0; min-width: 0; }
+
+.scenePip {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+.pipMain { width: 100%; height: 100%; }
+.pipCorner {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  width: 200px;
+  height: 140px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 2px solid #333;
+}
+
+/* ---- Scene switcher ---- */
+.sceneSwitcher {
+  display: flex;
+  gap: 6px;
+  padding: 6px 10px;
+  background: #111114;
+  border-top: 1px solid #1e1e22;
+  overflow-x: auto;
+  flex-shrink: 0;
+}
+.sceneBtn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  color: var(--color-text-muted);
+  background: #1a1a1e;
+  border: 1px solid #2a2a30;
+  white-space: nowrap;
+  transition: all .12s;
+}
+.sceneBtn:hover { background: #222228; color: var(--color-text); }
+.activeScene { border-color: var(--color-accent); color: var(--color-accent); background: rgba(108,99,255,.1); }

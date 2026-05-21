@@ -1,175 +1,228 @@
-# Eventyay Interpretation Portal Architecture
+# Eventyay Studio — Architecture
 
-## 1. Scope and intent
+## Overview
 
-The interpreter portal is a collaborative interpretation booth console integrated with Eventyay live workflows.
+Eventyay Studio is a browser-first live production platform modelled on StreamYard/Interprefy workflows. Moderators and participants conduct sessions entirely in the browser with no OBS or external encoder required.
 
-It covers:
+---
 
-- interpreter monitoring (Jitsi)
-- interpreter ingest (WebRTC audio uplink)
-- booth operations (participants, handoff, internal chat, health state)
+## Stack
 
-It does **not** replace Eventyay viewer playback surfaces; it feeds them.
+| Layer | Technology |
+|---|---|
+| Backend framework | Django 5 + Django REST Framework |
+| Authentication | Django AllAuth (email/password + Google/GitHub OAuth) |
+| Realtime | Django Channels 4 (ASGI/WebSocket) |
+| Channel layer | Redis (production) / in-memory (development) |
+| Database | PostgreSQL (production) / SQLite (development) |
+| Frontend | React 18 + TypeScript + Vite |
+| Media capture | Browser `getUserMedia`, `getDisplayMedia`, `MediaRecorder` |
+| Peer connections | WebRTC (`RTCPeerConnection`) relayed via Channels |
+| Streaming | YouTube Live via RTMP stream key (user-supplied) |
 
-## 2. Full system architecture
+---
 
-```mermaid
-flowchart LR
-  Speaker[Speaker/Presenter] -->|AV + floor audio| Jitsi[Jitsi meeting room]
-  Interpreter[Interpreter Portal] -->|Jitsi iframe monitor| Jitsi
-  Interpreter -->|Mic capture + WebRTC SDP/RTP| Ingest[Interpreter ingest API/server]
-  Ingest -->|PCM/Opus handoff| FFmpeg[FFmpeg transcode + HLS segmenter]
-  FFmpeg -->|playlist.m3u8 + segments| HLS[(HLS origin/CDN)]
-  Viewer[Eventyay viewer page] -->|YouTube video path| YouTube[YouTube player]
-  Viewer -->|Language audio selection| HLS
-  Viewer -->|sync loop aligns hidden audio with YouTube clock| Viewer
+## Directory layout
+
+```
+backend/
+  manage.py
+  config/
+    settings/
+      base.py          — shared settings
+      development.py   — SQLite + in-memory channels
+      production.py    — PostgreSQL + Redis
+    urls.py
+    asgi.py            — Channels ASGI entrypoint
+    wsgi.py
+  apps/
+    accounts/          — Custom User model, registration, login, AllAuth wiring
+    rooms/             — Room, RoomMembership, Stage, StageParticipant + RBAC
+    media_sources/     — MediaSource (PDFs, slides, images, video, YouTube)
+    streaming/         — StreamSession (recording / YouTube Live)
+    invitations/       — Tokenized invite links with role + expiry
+    notes/             — Collaborative RoomNote with revision history
+    realtime/          — StudioConsumer (WebSocket), routing
+
+frontend/
+  src/
+    App.tsx
+    context/AuthContext.tsx
+    hooks/
+      useStudio.ts             — central studio state + API calls
+      useStudioWebSocket.ts
+      useWebRTC.ts
+    services/
+      api.ts                   — typed fetch wrappers for all DRF endpoints
+      websocket.ts             — StudioWebSocket (auto-reconnect)
+    types/index.ts             — all shared TypeScript types
+    pages/
+      LoginPage.tsx
+      RegisterPage.tsx
+      DashboardPage.tsx
+      StudioPage.tsx           — main studio shell
+      InviteAcceptPage.tsx
+    components/studio/
+      StageArea.tsx            — central broadcast stage (layout-aware tile grid)
+      ParticipantCard.tsx      — backstage card with hover "Add to stage" overlay
+      SidebarPanel.tsx         — tabbed right sidebar
+      ChatPanel.tsx
+      MediaAssetsPanel.tsx
+      PeoplePanel.tsx
+      NotesPanel.tsx
+      StreamControls.tsx       — Record / Go Live button + YouTube config
 ```
 
-## 3. Interpreter audio pipeline
+---
 
-```mermaid
-flowchart TD
-  Mic[Interpreter microphone] --> GUM[navigator.mediaDevices.getUserMedia]
-  GUM --> DSP[Browser DSP\n echoCancellation/noiseSuppression/autoGainControl]
-  DSP --> Track[MediaStreamTrack audio]
-  Track --> PC[RTCPeerConnection]
-  PC --> Offer[Create SDP offer]
-  Offer --> API[POST /api/interpreter/connect/{channel}]
-  API --> Answer[SDP answer]
-  Answer --> PC
-  PC --> RTP[Opus over RTP]
-  RTP --> Ingest[Ingest termination]
-  Ingest --> FFmpeg[FFmpeg encode/segment]
-  FFmpeg --> HLS[HLS output]
+## RBAC model
+
+| Role | Key capabilities |
+|---|---|
+| `room_creator` | All permissions. Cannot be demoted. |
+| `moderator` | Stage control, mute, pin, spotlight, media, streaming, assign roles |
+| `participant` | Chat, raise hand; mic/camera by default; screen share toggleable |
+| `viewer` | Watch only; chat toggleable per room |
+
+Permissions are stored as a JSON dict on `RoomMembership.permissions`. Role defaults are defined in `apps/rooms/rbac.py`. Custom overrides are merged at runtime by `has_permission()`.
+
+---
+
+## Studio flow
+
+```
+Open /studio/<slug>
+  │
+  ├── HTTP: load Room, Members, Stage, Media, Stream status, Notes
+  ├── WS:  connect to ws/studio/<slug>/
+  │
+  ├── Backstage: all members visible as participant cards
+  │     └── Moderator hovers → "Add to stage" overlay
+  │           └── POST /api/rooms/<slug>/stage/add/ + ws stage.add_participant
+  │
+  ├── Stage: tile grid of StageParticipants
+  │     ├── Moderator controls: mute, pin, spotlight, remove
+  │     └── Layout: single / side_by_side / grid / presentation
+  │
+  └── Sidebar tabs: Chat | Media Assets | People | Notes | Invitations (mod only)
 ```
 
-## 4. Viewer synchronization flow
+---
 
-```mermaid
-sequenceDiagram
-  participant V as Eventyay Viewer
-  participant Y as YouTube Player (master clock)
-  participant A as Hidden HLS Audio
+## WebSocket event protocol
 
-  loop every ~500ms
-    V->>Y: read currentTime
-    V->>A: read currentTime
-    V->>V: compute drift = Y - A
-    alt small drift
-      V->>A: playbackRate smoothing
-    else large drift
-      V->>A: hard resync seek
-    end
-  end
+All frames are JSON:
+
+**Client → server:**
+```json
+{ "type": "stage.add_participant", "payload": { "user_id": 42 } }
 ```
 
-## 5. Multi-user booth architecture
-
-```mermaid
-flowchart LR
-  Coordinator[Coordinator] <--> Chat[Booth internal chat]
-  Active[Active interpreter] <--> Chat
-  Backup[Backup interpreter] <--> Chat
-  Listener[Listener/observer] <--> Chat
-
-  Coordinator -->|assign live role| ActiveState[Active interpreter state]
-  Backup -->|request handoff| Coordinator
-  ActiveState -->|single publisher per language| Ingest[Ingest pipeline]
-
-  Coordinator --> Jitsi[Jitsi monitor room]
-  Active --> Jitsi
-  Backup --> Jitsi
-  Listener --> Jitsi
+**Server → client (broadcast):**
+```json
+{ "type": "stage.updated", "action": "add", "target_user_id": 42, "by_user_id": 1 }
 ```
 
-## 6. Runtime components in this repository
+Full event list: `chat.send`, `stage.{add_participant,remove_participant,mute,pin,spotlight}`,
+`participant.{raise_hand,lower_hand}`, `stream.status_changed`, `media.switch`,
+`note.update`, `webrtc.{offer,answer,ice_candidate}`.
 
-- `app.py`
-  - Flask routes, Socket.IO event handlers, access token checks, and ingest API boundaries
-- `portal/booth_state.py`
-  - in-memory booth registry, participant role policy, active interpreter ownership, handoff state, and chat history
-- `portal/ingest.py`
-  - aiortc peer connection handling and FFmpeg/HLS recorder setup
-- `templates/base.html`
-  - Eventyay-style header and page shell
-- `templates/interpreter_booth.html`
-  - server-rendered booth page
-- `static/js/interpreter-booth.js`
-  - browser mic capture, WebRTC offer creation, Jitsi iframe setup, Socket.IO client behavior, and DOM updates
-- `static/css/interpreter.css`
-  - lightweight Eventyay-aligned styles
+---
 
-## 7. State model and ownership
+## API summary
 
-`BoothRegistry` tracks:
+```
+POST   /api/auth/register/
+POST   /api/auth/login/
+POST   /api/auth/logout/
+GET    /api/auth/profile/
+PATCH  /api/auth/profile/
 
-- booth metadata (`booth_id`, `language`, `channel_id`)
-- active interpreter id
-- participant roster and roles
-- per-participant connection, mic, and ingest state
-- handoff state
-- internal booth chat timeline
-- ingest status
+GET    /api/rooms/
+POST   /api/rooms/
+GET    /api/rooms/<slug>/
+PATCH  /api/rooms/<slug>/
+DELETE /api/rooms/<slug>/
+POST   /api/rooms/<slug>/join/
+DELETE /api/rooms/<slug>/leave/
+GET    /api/rooms/<slug>/members/
+PATCH  /api/rooms/<slug>/members/<id>/role/
+DELETE /api/rooms/<slug>/members/<id>/remove/
+GET    /api/rooms/<slug>/stage/
+POST   /api/rooms/<slug>/stage/add/
+PATCH  /api/rooms/<slug>/stage/<user_id>/
+DELETE /api/rooms/<slug>/stage/<user_id>/
 
-The browser keeps only local UI/session state: joined participant id, mic stream, peer connection, current booth snapshot, and current chat messages. Server state remains the source of truth for who is active.
+GET    /api/media/rooms/<slug>/
+POST   /api/media/rooms/<slug>/
+DELETE /api/media/rooms/<slug>/<id>/
+POST   /api/media/rooms/<slug>/<id>/activate/
 
-## 8. Active interpreter enforcement
+GET    /api/streaming/rooms/<slug>/status/
+POST   /api/streaming/rooms/<slug>/start/
+POST   /api/streaming/rooms/<slug>/stop/
 
-Enforcement rules:
+GET    /api/invitations/rooms/<slug>/
+POST   /api/invitations/rooms/<slug>/
+DELETE /api/invitations/rooms/<slug>/<id>/
+POST   /api/invitations/accept/<token>/
 
-1. Start ingest only when local participant is active for the channel.
-2. The server rejects ingest negotiation from standby interpreters.
-3. Active interpreter handoff clears the previous publisher's mic and ingest state.
-4. The server disconnects the previous ingest session when active ownership changes.
-5. Coordinator role can override active ownership.
-6. Non-interpreter roles cannot become active publishers.
+GET    /api/notes/rooms/<slug>/
+PATCH  /api/notes/rooms/<slug>/
+GET    /api/notes/rooms/<slug>/revisions/
+```
 
-## 9. Reconnect and teardown behavior
+---
 
-Reconnect:
+## Running locally
 
-- browser peer connection state is surfaced as connected/reconnecting/disconnected
-- stale live publishers are stopped when active ownership changes
-- durable reconnect policy belongs in the ingest service layer once production persistence is added
+### Backend
 
-Teardown:
+```bash
+cd backend
+cp .env.example .env          # fill in values
+python manage.py migrate
+python manage.py createsuperuser
+daphne -p 8000 config.asgi:application
+# Or for HTTP-only dev (no WebSockets):
+python manage.py runserver
+```
 
-- close peer connection
-- stop recorder and peer connection server-side on disconnect
-- update booth state over Socket.IO
-- remove participant from in-memory booth on socket disconnect
+### Frontend
 
-## 10. Jitsi role vs ingest role
+```bash
+cd frontend
+npm install
+npm run dev   # Vite dev server on :5173 — proxies /api and /ws to :8000
+```
 
-Jitsi responsibilities:
+---
 
-- monitor floor audio/video
-- booth coordination context
+## Production checklist
 
-Jitsi non-goals:
+- Set `DJANGO_SETTINGS_MODULE=config.settings.production`
+- Provide all environment variables
+- Run `python manage.py migrate && python manage.py collectstatic`
+- Start with `daphne` (ASGI) behind nginx
+- Ensure Redis is running for Channels
+- Configure `ALLOWED_HOSTS` and `CORS_ALLOWED_ORIGINS`
+- Enable HTTPS (`SECURE_SSL_REDIRECT=True`)
 
-- not the interpreter ingest transport
-- not viewer delivery pipeline
+---
 
-Ingest responsibilities:
+## Migration from previous Flask/Vue architecture
 
-- receive interpreter mic audio uplink via WebRTC
-- hand off to FFmpeg/HLS chain for viewer consumption
+The previous Flask + Vue 3 interpretation booth code lives in:
+- `app.py`, `portal/` — Flask routes and SocketIO handlers
+- `src/` (Vue 3 SPA)
+- `static/`, `templates/` — server-rendered HTML
 
-## 11. Deployment assumptions
+These are preserved for reference but are **not loaded by the new Django server**. They can be removed once the new platform is validated.
 
-- interpreter portal is served as a web module in Eventyay deployment topology
-- ingest endpoint is reachable from interpreter browsers
-- Socket.IO is available for cross-client booth state
-- local development uses locked PyAV wheels instead of compiling against system FFmpeg headers
-- aiortc `MediaRecorder` provides the HLS output path used by the prototype
-- viewer stage page consumes generated HLS language channels
-- PostgreSQL and Redis can be added later for persistence and multi-worker scale
-
-## 12. Reliability and operational constraints
-
-- recommend headphones-first operation to reduce feedback risk
-- prevent local audio loopback in mic capture path
-- preserve clear state indicators for ingest, reconnecting, and live ownership
-- keep service boundaries explicit for aiortc/Janus backend compatibility
+| Old feature | New equivalent |
+|---|---|
+| Basic access token auth | Django AllAuth (email/password + OAuth) |
+| Flask-SocketIO booth events | Django Channels `StudioConsumer` |
+| Jitsi iframe (monitoring) | Removed — native WebRTC stage |
+| aiortc ingest | Browser `MediaRecorder` / YouTube RTMP |
+| Vue 3 SPA (`src/`) | React + TypeScript (`frontend/src/`) |

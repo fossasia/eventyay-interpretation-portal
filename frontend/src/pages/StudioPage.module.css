@@ -1,0 +1,246 @@
+/* ============================================================
+   Studio page — StreamYard-style layout
+   ============================================================ */
+
+.page {
+  display: grid;
+  grid-template-rows: 48px 1fr;
+  height: 100vh;
+  background: var(--color-bg);
+  overflow: hidden;
+}
+
+/* ---- Loading / error ---- */
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  color: var(--color-text-muted);
+  font-size: 15px;
+}
+
+/* ============================================================
+   TOP BAR
+   ============================================================ */
+.topbar {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  padding: 0 12px;
+  background: #111115;
+  border-bottom: 1px solid #1e1e22;
+  z-index: 50;
+  gap: 8px;
+}
+
+/* Left */
+.tbLeft {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.backBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  font-size: 16px;
+}
+.backBtn:hover { background: #1e1e22; color: var(--color-text); }
+.brandMark { font-size: 18px; line-height: 1; }
+.roomName {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.liveChip {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  padding: 2px 8px;
+  border-radius: 20px;
+  flex-shrink: 0;
+}
+.live    { background: var(--color-live); color: #fff; }
+.recording { background: #1a1a1e; border: 1px solid #e74c3c; color: #e74c3c; }
+
+/* Center */
+.tbCenter {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Right */
+.tbRight {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+.iconBtn {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  color: var(--color-text-muted);
+  transition: background .12s, color .12s;
+}
+.iconBtn:hover { background: #1e1e22; color: var(--color-text); }
+.iconBtn.muted { background: rgba(231,76,60,.15); color: var(--color-danger); }
+.iconBtn.active { background: rgba(108,99,255,.15); color: var(--color-accent); }
+.joinBtn {
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--color-accent);
+  color: #fff;
+  transition: background .12s;
+}
+.joinBtn:hover { background: var(--color-accent-hover); }
+.leaveBtn {
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  background: rgba(231,76,60,.15);
+  border: 1px solid rgba(231,76,60,.3);
+  color: var(--color-danger);
+}
+.leaveBtn:hover { background: rgba(231,76,60,.25); }
+
+/* ============================================================
+   BODY
+   ============================================================ */
+.body {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* Center column */
+.centerCol {
+  display: grid;
+  grid-template-rows: 1fr 120px 60px;
+  overflow: hidden;
+  min-height: 0;
+  min-width: 0;
+}
+
+.stageWrapper {
+  overflow: hidden;
+  min-height: 0;
+}
+
+.backstageWrapper {
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* ============================================================
+   BOTTOM TOOLBAR — StreamYard-style mic/cam/screen controls
+   ============================================================ */
+.bottomToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  background: #0d0d10;
+  border-top: 1px solid #1c1c20;
+  padding: 0 16px;
+}
+
+.toolGroup {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.toolDivider {
+  width: 1px;
+  height: 28px;
+  background: #2a2a30;
+  margin: 0 8px;
+  flex-shrink: 0;
+}
+
+/* Each toolbar button: icon + label stacked */
+.toolBtn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 52px;
+  height: 52px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: background .12s, color .12s;
+  padding: 0;
+}
+.toolBtn:hover {
+  background: #1e1e24;
+  color: var(--color-text);
+}
+
+/* Red state — muted / cam off */
+.toolBtnOff {
+  background: rgba(231, 76, 60, 0.12);
+  color: var(--color-danger);
+}
+.toolBtnOff:hover {
+  background: rgba(231, 76, 60, 0.22);
+  color: var(--color-danger);
+}
+
+/* Active state — e.g. screen sharing */
+.toolBtnActive {
+  background: rgba(108, 99, 255, 0.12);
+  color: var(--color-accent);
+}
+.toolBtnActive:hover {
+  background: rgba(108, 99, 255, 0.22);
+}
+
+/* Leave button */
+.toolBtnLeave {
+  color: var(--color-danger);
+}
+.toolBtnLeave:hover {
+  background: rgba(231, 76, 60, 0.15);
+  color: var(--color-danger);
+}
+
+.toolIcon {
+  font-size: 18px;
+  line-height: 1;
+  display: block;
+}
+.toolLabel {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+  line-height: 1;
+  max-width: 48px;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

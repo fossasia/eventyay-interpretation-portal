@@ -1,0 +1,85 @@
+/* Sidebar outer wrapper */
+.sidebar {
+  display: flex;
+  flex-direction: row;
+  height: 100%;
+  background: #111115;
+  border-left: 1px solid #1e1e22;
+  transition: width .2s ease;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.collapsed { width: 48px; }
+.expanded  { width: 320px; }
+
+/* Icon rail */
+.rail {
+  display: flex;
+  flex-direction: column;
+  width: 48px;
+  flex-shrink: 0;
+  padding: 8px 0;
+  gap: 2px;
+  border-right: 1px solid #1e1e22;
+}
+.railBtn {
+  width: 100%;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0;
+  color: var(--color-text-muted);
+  transition: color .12s, background .12s;
+}
+.railBtn:hover { background: #1a1a1e; color: var(--color-text); }
+.railBtn.active { background: rgba(108,99,255,.15); color: var(--color-accent); border-right: 2px solid var(--color-accent); }
+.railIcon { font-size: 18px; line-height: 1; }
+
+/* Panel content area */
+.panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  height: 40px;
+  border-bottom: 1px solid #1e1e22;
+  flex-shrink: 0;
+}
+.panelTitle { font-size: 12px; font-weight: 600; color: var(--color-text-muted); letter-spacing: .05em; text-transform: uppercase; }
+.closeBtn { font-size: 13px; color: var(--color-text-dim); padding: 4px; border-radius: 4px; }
+.closeBtn:hover { color: var(--color-text); background: #1e1e22; }
+
+.panelBody {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* ---- Invitations panel ---- */
+.invPanel { display: flex; flex-direction: column; gap: 12px; padding: 12px; overflow-y: auto; }
+.invCreate { display: flex; gap: 6px; }
+.invSelect { flex: 1; font-size: 12px; padding: 5px 8px; border-radius: 4px; background: #1a1a1e; border: 1px solid #2a2a30; color: var(--color-text); }
+.invCreateBtn { font-size: 12px; padding: 5px 10px; border-radius: 4px; background: var(--color-accent); color: #fff; white-space: nowrap; }
+.invCreateBtn:disabled { opacity: .5; }
+.invList { display: flex; flex-direction: column; gap: 8px; }
+.invItem { background: #1a1a1e; border: 1px solid #2a2a30; border-radius: 6px; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+.invInfo { display: flex; align-items: center; gap: 8px; }
+.invRole { font-size: 11px; padding: 2px 7px; border-radius: 20px; background: rgba(108,99,255,.15); color: var(--color-accent); text-transform: capitalize; }
+.invUses { font-size: 11px; color: var(--color-text-dim); }
+.invUrl { font-size: 10px; color: var(--color-text-dim); word-break: break-all; font-family: var(--font-mono); }
+.invActions { display: flex; gap: 6px; }
+.copyBtn { font-size: 11px; padding: 3px 8px; border-radius: 4px; background: #222228; border: 1px solid #2a2a30; color: var(--color-text-muted); }
+.copyBtn:hover { color: var(--color-text); }
+.revokeBtn { font-size: 11px; padding: 3px 8px; border-radius: 4px; background: rgba(231,76,60,.12); border: 1px solid rgba(231,76,60,.25); color: var(--color-danger); }
+.invEmpty { font-size: 12px; color: var(--color-text-dim); text-align: center; padding: 16px 0; }

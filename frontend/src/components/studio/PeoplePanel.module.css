@@ -1,0 +1,5 @@
+.panel { padding: 14px; }
+.heading { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+.sectionLabel { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--color-text-muted); margin: 10px 0 8px; }
+
+.grid { display: flex; flex-wrap: wrap; gap: 8px; }
