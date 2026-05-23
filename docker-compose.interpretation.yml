@@ -1,0 +1,17 @@
+services:
+
+  # ── MediaMTX audio server ─────────────────────────────────────
+  mediamtx:
+    image: bluenviron/mediamtx:1
+    volumes:
+      - ./mediamtx.yml:/mediamtx.yml:ro
+    ports:
+      - "8888:8888"    # HLS output
+      - "8889:8889"    # WHIP (WebRTC HTTP ingest)
+      - "8189:8189/udp" # WebRTC ICE/UDP mux
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8888/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3

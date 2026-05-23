@@ -79,6 +79,59 @@ uv sync --python 3.13 --dev
 uv run python app.py
 ```
 
+## MediaMTX (local media server)
+
+MediaMTX handles WebRTC audio ingest (WHIP) and HLS output. It replaces the
+prototype `aiortc` ingest pipeline with a production-grade media server.
+
+### Quick start (Docker Compose)
+
+```bash
+docker compose -f docker-compose.interpretation.yml up -d
+```
+
+This starts MediaMTX with:
+- **WHIP ingest** on `http://localhost:8889` — interpreters publish audio here
+- **HLS output** on `http://localhost:8888` — audience fetches streams here
+
+### Quick start (standalone Docker)
+
+```bash
+docker run --rm -d --name mediamtx \
+  -v $(pwd)/mediamtx.yml:/mediamtx.yml:ro \
+  -p 8888:8888 \
+  -p 8889:8889 \
+  -p 8189:8189/udp \
+  bluenviron/mediamtx:1
+```
+
+### Verify MediaMTX is running
+
+```bash
+# HLS endpoint (should return a page or 200)
+curl -s -o /dev/null -w "%{http_code}" http://localhost:8888/
+
+# WHIP endpoint (should return 404 — no path specified, but confirms server is up)
+curl -s -o /dev/null -w "%{http_code}" http://localhost:8889/
+
+# Container logs
+docker logs mediamtx
+```
+
+### Configuration
+
+The `mediamtx.yml` file in the repository root configures MediaMTX for local
+development. Key settings:
+
+| Setting | Value | Purpose |
+|---|---|---|
+| `webrtcAddress` | `:8889` | WHIP ingest port |
+| `hlsAddress` | `:8888` | HLS output port |
+| `hlsSegmentDuration` | `2s` | HLS segment length |
+| `webrtcEncryption` | `no` | Disable DTLS for local dev (no TLS) |
+
+See [MediaMTX docs](https://github.com/bluenviron/mediamtx) for full configuration reference.
+
 Open:
 
 ```text

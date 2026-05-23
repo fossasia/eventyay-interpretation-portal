@@ -1,0 +1,22 @@
+# mediamtx.yml — local dev configuration
+# See https://github.com/bluenviron/mediamtx for full reference.
+
+logLevel: info
+logDestinations: [stdout]
+
+# ── WHIP ingest (WebRTC HTTP Ingest Protocol) ───────────────────
+webrtcAddress: :8889
+webrtcEncryption: no
+
+# ── HLS output ──────────────────────────────────────────────────
+hlsAddress: :8888
+hlsEncryption: no
+hlsAlwaysRemux: yes
+hlsSegmentDuration: 2s
+hlsSegmentMaxSize: 50MB
+
+# ── Path defaults ───────────────────────────────────────────────
+# All paths are auto-created on first publish.
+# Single publisher per path is enforced by default.
+pathDefaults:
+  record: no
