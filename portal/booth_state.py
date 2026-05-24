@@ -63,6 +63,7 @@ class Booth:
 class BoothRegistry:
     def __init__(self) -> None:
         self._booths: dict[str, Booth] = {}
+        # TODO(Phase 1C): migrate to asyncio.Lock when Flask-SocketIO is removed
         self._lock = RLock()
 
     def get_or_create_booth(self, booth_id: str, language: str, channel_id: str) -> Booth:

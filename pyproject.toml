@@ -10,11 +10,15 @@ dependencies = [
     "aiortc==1.14.0",
     "av==16.1.0",
     "python-dotenv==1.2.2",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.34.0",
+    "pydantic-settings>=2.9.0",
 ]
 
 [dependency-groups]
 dev = [
     "pytest==9.0.3",
+    "httpx>=0.28.0",
 ]
 
 [tool.pytest.ini_options]
