@@ -364,6 +364,16 @@ async function validateHlsOutput() {
   try {
     const response = await fetch(url, { cache: 'no-store' })
     if (!response.ok) return false
+
+    const contentType = response.headers.get('content-type') || ''
+    const normalizedContentType = contentType.toLowerCase()
+    const isHlsMimeType =
+      normalizedContentType.startsWith('application/vnd.apple.mpegurl') ||
+      normalizedContentType.startsWith('application/x-mpegurl') ||
+      normalizedContentType.startsWith('audio/mpegurl')
+
+    if (!isHlsMimeType) return false
+
     const text = await response.text()
     return text.includes('#EXTM3U')
   } catch {
