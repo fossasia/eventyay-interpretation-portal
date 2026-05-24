@@ -40,6 +40,7 @@ class Settings:
     hls_playlist_length: int
     mediamtx_whip_base: str
     mediamtx_hls_base: str
+    use_legacy_ingest: bool
 
 
 def load_settings() -> Settings:
@@ -57,6 +58,7 @@ def load_settings() -> Settings:
         hls_playlist_length=int(os.getenv('HLS_PLAYLIST_LENGTH', '8')),
         mediamtx_whip_base=os.getenv('MEDIAMTX_WHIP_BASE', 'http://localhost:8889'),
         mediamtx_hls_base=os.getenv('MEDIAMTX_HLS_BASE', 'http://localhost:8888'),
+        use_legacy_ingest=parse_bool(os.getenv('USE_LEGACY_INGEST', 'false')),
     )
 
 

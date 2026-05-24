@@ -24,6 +24,10 @@ const state = {
   jitsiDomain: portal.dataset.jitsiDomain || '',
   whipBase: portal.dataset.whipBase || '',
   hlsBase: portal.dataset.hlsBase || '',
+  // USE_LEGACY_INGEST feature flag surfaced from server config.
+  // When true, startLiveIngest() falls back to the legacy aiortc endpoint if WHIP fails.
+  useLegacyIngest: portal.dataset.useLegacyIngest === 'true',
+  usedLegacyFallback: false,
   micDeviceId: localStorage.getItem('mic-device-id') || '',
   preflight: {
     micPermission: 'pending',
@@ -678,6 +682,46 @@ async function toggleMicMute() {
   renderMicControls()
 }
 
+// ── Ingest path helpers ───────────────────────────────────────────────────────
+// MediaMTX WHIP URL format: /{channelId}/whip (not /whip/{channelId})
+async function doWhipIngest(peerConnection) {
+  const whipUrl = `${state.whipBase}/${encodeURIComponent(state.channelId)}/whip`
+  const response = await fetch(whipUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/sdp' },
+    body: peerConnection.localDescription.sdp,
+  })
+  if (!response.ok) {
+    const detail = await response.text().catch(() => response.statusText)
+    throw new Error(`WHIP error ${response.status}: ${detail}`)
+  }
+  const answerSdp = await response.text()
+  await peerConnection.setRemoteDescription({ type: 'answer', sdp: answerSdp })
+}
+
+// Legacy aiortc path via Flask — kept for the migration period (USE_LEGACY_INGEST=true).
+// Phase 1D: remove this function and the /api/interpreter/connect route.
+async function doLegacyIngest(peerConnection) {
+  const response = await fetch(`/api/interpreter/connect/${encodeURIComponent(state.channelId)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      booth_id: state.boothId,
+      participant_id: state.participantId,
+      language: state.language,
+      token: state.token,
+      type: peerConnection.localDescription.type,
+      sdp: peerConnection.localDescription.sdp,
+    }),
+  })
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({ error: response.statusText }))
+    throw new Error(payload.error || 'Legacy ingest negotiation failed.')
+  }
+  const answer = await response.json()
+  await peerConnection.setRemoteDescription(answer)
+}
+
 async function startLiveIngest() {
   if (!state.joined || !state.participantId) {
     showError('Join the booth before going live.')
@@ -717,40 +761,26 @@ async function startLiveIngest() {
     await waitForIceGathering(peerConnection)
 
     if (state.whipBase) {
-      // WHIP path: POST raw SDP offer to MediaMTX; receive SDP answer as plain text.
-      // MediaMTX WHIP URL format is /{channelId}/whip (not /whip/{channelId}).
-      const whipUrl = `${state.whipBase}/${encodeURIComponent(state.channelId)}/whip`
-      const response = await fetch(whipUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/sdp' },
-        body: peerConnection.localDescription.sdp,
-      })
-      if (!response.ok) {
-        const detail = await response.text().catch(() => response.statusText)
-        throw new Error(`WHIP error ${response.status}: ${detail}`)
+      // Primary path: WHIP to MediaMTX.
+      try {
+        await doWhipIngest(peerConnection)
+        state.usedLegacyFallback = false
+      } catch (whipError) {
+        if (state.useLegacyIngest) {
+          // USE_LEGACY_INGEST=true — fall back to aiortc endpoint.
+          showError(`WHIP failed (${whipError.message}); retrying via legacy ingest…`)
+          await doLegacyIngest(peerConnection)
+          state.usedLegacyFallback = true
+        } else {
+          throw whipError
+        }
       }
-      const answerSdp = await response.text()
-      await peerConnection.setRemoteDescription({ type: 'answer', sdp: answerSdp })
+    } else if (state.useLegacyIngest) {
+      // No WHIP base configured — use legacy endpoint only if flag is set.
+      await doLegacyIngest(peerConnection)
+      state.usedLegacyFallback = true
     } else {
-      // Legacy: aiortc path via Flask
-      const response = await fetch(`/api/interpreter/connect/${encodeURIComponent(state.channelId)}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          booth_id: state.boothId,
-          participant_id: state.participantId,
-          language: state.language,
-          token: state.token,
-          type: peerConnection.localDescription.type,
-          sdp: peerConnection.localDescription.sdp,
-        }),
-      })
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({ error: response.statusText }))
-        throw new Error(payload.error || 'Ingest negotiation failed.')
-      }
-      const answer = await response.json()
-      await peerConnection.setRemoteDescription(answer)
+      throw new Error('No ingest path available. Set MEDIAMTX_WHIP_BASE or enable USE_LEGACY_INGEST.')
     }
 
     state.ingestConnected = true
@@ -785,8 +815,8 @@ async function stopLiveIngest() {
     stopMicMeter()
   }
   if (state.joined && state.participantId) {
-    if (!state.whipBase) {
-      // Legacy: notify Flask to release the server-side aiortc peer connection
+    if (state.usedLegacyFallback) {
+      // Release the server-side aiortc peer connection only when the legacy path was used.
       await fetch(`/api/interpreter/disconnect/${encodeURIComponent(state.channelId)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -797,6 +827,7 @@ async function stopLiveIngest() {
           token: state.token,
         }),
       }).catch(() => {})
+      state.usedLegacyFallback = false
     }
     socket.emit('booth:update-state', {
       booth_id: state.boothId,

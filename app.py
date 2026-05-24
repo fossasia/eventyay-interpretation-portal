@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import atexit
+import urllib.error
+import urllib.request
 from threading import RLock
 from typing import Any
 
@@ -41,6 +43,22 @@ def json_error(message: str, code: int) -> tuple[dict[str, str], int]:
     return {'error': message}, code
 
 
+def _check_mediamtx() -> bool:
+    """HEAD-check the MediaMTX HLS address; any HTTP response means the server is up."""
+    if not settings.mediamtx_hls_base:
+        return False
+    try:
+        req = urllib.request.Request(f'{settings.mediamtx_hls_base}/', method='HEAD')
+        with urllib.request.urlopen(req, timeout=2):
+            return True
+    except urllib.error.HTTPError:
+        # 4xx/5xx response — the server is running (404 expected until a stream is published)
+        return True
+    except urllib.error.URLError:
+        # Connection refused, DNS failure, or timeout
+        return False
+
+
 @app.route('/')
 def home() -> Any:
     return redirect('/interpreter/demo-booth')
@@ -52,6 +70,8 @@ def healthz() -> Any:
         {
             'ok': True,
             'aiortc_available': AIORTC_AVAILABLE,
+            'use_legacy_ingest': settings.use_legacy_ingest,
+            'mediamtx_ok': _check_mediamtx(),
         }
     )
 
@@ -72,6 +92,7 @@ def interpreter_booth(booth_id: str) -> Any:
         aiortc_available=AIORTC_AVAILABLE,
         mediamtx_whip_base=settings.mediamtx_whip_base,
         mediamtx_hls_base=settings.mediamtx_hls_base,
+        use_legacy_ingest=settings.use_legacy_ingest,
     )
 
 
