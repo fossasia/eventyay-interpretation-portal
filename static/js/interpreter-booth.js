@@ -25,6 +25,11 @@ const state = {
   whipBase: portal.dataset.whipBase || '',
   hlsBase: portal.dataset.hlsBase || '',
   micDeviceId: localStorage.getItem('mic-device-id') || '',
+  preflight: {
+    micPermission: 'pending',
+    audioDevice: 'pending',
+    serverReachable: 'pending',
+  },
 }
 
 const elements = {
@@ -64,6 +69,10 @@ const elements = {
   liveLabel: document.getElementById('live-label'),
   ctrlCompound: document.querySelector('.ctrl-compound'),
   leaveBooth: document.getElementById('leave-booth-btn'),
+  preflightRetry: document.getElementById('preflight-retry'),
+  checkMicPermission: document.getElementById('check-mic-permission'),
+  checkAudioDevice: document.getElementById('check-audio-device'),
+  checkServer: document.getElementById('check-server'),
 }
 
 // ── Audio context state (not reflected directly in UI) ────────────────────
@@ -84,7 +93,10 @@ async function boot() {
   await fetchIngestReachability()
   await populateMicDevices()
   bindEventHandlers()
-  render()
+  render() // show page with pending preflight state first
+  runPreflightChecks().catch((error) => {
+    showError(`Preflight checks failed: ${error.message}`)
+  })
 }
 
 function bindEventHandlers() {
@@ -209,6 +221,12 @@ function bindEventHandlers() {
   })
 
   // Leave booth button
+  elements.preflightRetry.addEventListener('click', () => {
+    runPreflightChecks().catch((error) => {
+      showError(`Preflight checks failed: ${error.message}`)
+    })
+  })
+
   elements.leaveBooth.addEventListener('click', async () => {
     if (state.ingestConnected) {
       await stopLiveIngest()
@@ -256,6 +274,80 @@ function bindEventHandlers() {
       channel_id: state.channelId,
     })
   })
+}
+
+async function runPreflightChecks() {
+  setPreflightStatus('micPermission', 'pending', 'Checking…')
+  setPreflightStatus('audioDevice', 'pending', 'Checking…')
+  setPreflightStatus('serverReachable', 'pending', 'Checking…')
+
+  // 1. Microphone permission
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    stream.getTracks().forEach((t) => t.stop())
+    setPreflightStatus('micPermission', 'pass', 'Permission granted')
+  } catch (error) {
+    const msg =
+      error.name === 'NotAllowedError'
+        ? 'Denied — allow microphone access in browser settings'
+        : `Error: ${error.message}`
+    setPreflightStatus('micPermission', 'fail', msg)
+  }
+
+  // 2. Audio device detected
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices()
+    const audioInputs = devices.filter((d) => d.kind === 'audioinput')
+    if (audioInputs.length > 0) {
+      setPreflightStatus('audioDevice', 'pass', `${audioInputs.length} device${audioInputs.length > 1 ? 's' : ''} found`)
+    } else {
+      setPreflightStatus('audioDevice', 'fail', 'No microphone detected — connect a USB mic or headset')
+    }
+  } catch {
+    setPreflightStatus('audioDevice', 'warn', 'Could not enumerate devices')
+  }
+
+  // 3. Media server reachability — any HTTP response (even 404) means the server is up;
+  //    only a network error (connection refused / timeout) means it is down.
+  if (!state.hlsBase) {
+    setPreflightStatus('serverReachable', 'warn', 'HLS base not configured — server check skipped')
+  } else {
+    try {
+      const controller = new AbortController()
+      const timeoutId = window.setTimeout(() => controller.abort(), 4000)
+      // no-cors avoids CORS errors; opaque response (status 0) is fine — network errors throw
+      await fetch(`${state.hlsBase}/`, { method: 'HEAD', mode: 'no-cors', signal: controller.signal })
+      window.clearTimeout(timeoutId)
+      setPreflightStatus('serverReachable', 'pass', 'MediaMTX is reachable')
+      state.ingestReachable = true
+    } catch (error) {
+      const msg =
+        error.name === 'AbortError'
+          ? 'Timed out — start MediaMTX: docker compose up mediamtx'
+          : 'Unreachable — start MediaMTX: docker compose up mediamtx'
+      setPreflightStatus('serverReachable', 'fail', msg)
+      state.ingestReachable = false
+    }
+  }
+
+  renderMicControls()
+}
+
+function setPreflightStatus(check, status, message = '') {
+  state.preflight[check] = status
+  const idMap = {
+    micPermission: 'check-mic-permission',
+    audioDevice: 'check-audio-device',
+    serverReachable: 'check-server',
+  }
+  const iconMap = { pass: '✅', fail: '❌', warn: '⚠️', pending: '⏳' }
+  const el = document.getElementById(idMap[check])
+  if (!el) return
+  el.className = `preflight-item preflight--${status}`
+  const iconEl = el.querySelector('.preflight-icon')
+  if (iconEl) iconEl.textContent = iconMap[status] ?? '⏳'
+  const msgEl = el.querySelector('.preflight-msg')
+  if (msgEl) msgEl.textContent = message
 }
 
 async function fetchBoothState() {
@@ -769,7 +861,10 @@ function renderMicControls() {
   if (elements.liveLabel) elements.liveLabel.textContent = state.ingestConnected ? 'STOP' : 'GO LIVE'
 
   elements.toggleMic.disabled = !state.joined
-  elements.goLive.disabled = !state.ingestConnected && (!joinedActiveInterpreter || !state.ingestReachable)
+  const preflightCriticalPass =
+    state.preflight.micPermission === 'pass' &&
+    state.preflight.serverReachable !== 'fail'
+  elements.goLive.disabled = !state.ingestConnected && (!joinedActiveInterpreter || !state.ingestReachable || !preflightCriticalPass)
   elements.passRelay.disabled = !joinedActiveInterpreter
   // Disable device selector while streaming — cannot switch device mid-stream
   elements.micDeviceSelect.disabled = state.ingestConnected

@@ -559,6 +559,59 @@ label {
   margin-top: 0.55rem;
 }
 
+/* ── Preflight checklist ─────────────────────────────────── */
+.preflight-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.preflight-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.45rem 0.55rem;
+  border-radius: var(--radius);
+  transition: background 0.15s;
+}
+
+.preflight-icon {
+  font-size: 1rem;
+  line-height: 1.35;
+  flex-shrink: 0;
+  width: 1.4rem;
+  text-align: center;
+}
+
+.preflight-info {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.preflight-name {
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.preflight-msg {
+  font-size: 0.78rem;
+  color: var(--color-muted);
+}
+
+.preflight--pending { background: rgb(108 117 125 / 0.06); }
+
+.preflight--pass { background: rgb(42 143 76 / 0.08); }
+.preflight--pass .preflight-name { color: var(--color-success); }
+
+.preflight--fail { background: rgb(178 62 101 / 0.08); }
+.preflight--fail .preflight-name { color: var(--color-danger); }
+
+.preflight--warn { background: rgb(209 133 56 / 0.08); }
+.preflight--warn .preflight-name { color: var(--color-warning); }
+
 /* ── Utility ─────────────────────────────────────────────── */
 .hidden {
   display: none !important;

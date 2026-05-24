@@ -63,6 +63,39 @@
     </div>
   </section>
 
+  <!-- ── Preflight checks ─────────────────────────────────────────────────── -->
+  <section class='panel panel--preflight'>
+    <header class='panel-header'>
+      <h2>Preflight Checks</h2>
+      <button id='preflight-retry' type='button' class='btn btn-xs'>↺ Retry</button>
+    </header>
+    <div class='panel-body'>
+      <ul class='preflight-list'>
+        <li id='check-mic-permission' class='preflight-item preflight--pending'>
+          <span class='preflight-icon'>⏳</span>
+          <div class='preflight-info'>
+            <span class='preflight-name'>Microphone permission</span>
+            <span class='preflight-msg'></span>
+          </div>
+        </li>
+        <li id='check-audio-device' class='preflight-item preflight--pending'>
+          <span class='preflight-icon'>⏳</span>
+          <div class='preflight-info'>
+            <span class='preflight-name'>Audio device detected</span>
+            <span class='preflight-msg'></span>
+          </div>
+        </li>
+        <li id='check-server' class='preflight-item preflight--pending'>
+          <span class='preflight-icon'>⏳</span>
+          <div class='preflight-info'>
+            <span class='preflight-name'>Media server reachable</span>
+            <span class='preflight-msg'></span>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </section>
+
   <!-- ── Google Meet–style control bar ───────────────────────────────────── -->
   <div class='control-bar' id='main-control-bar'>
     <!-- Mic device picker — floats above bar when chevron is clicked -->
