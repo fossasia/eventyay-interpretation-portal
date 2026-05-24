@@ -73,6 +73,7 @@ const elements = {
   checkMicPermission: document.getElementById('check-mic-permission'),
   checkAudioDevice: document.getElementById('check-audio-device'),
   checkServer: document.getElementById('check-server'),
+  hlsValidationStatus: document.getElementById('hls-validation-status'),
 }
 
 // ── Audio context state (not reflected directly in UI) ────────────────────
@@ -80,6 +81,12 @@ let micTestStream = null
 let micAnimFrame = null
 let micAudioCtx = null
 let micAnalyser = null
+
+// ── HLS polling state ────────────────────────────────────────────────────
+let hlsPollTimer = null
+let hlsPollCount = 0
+const HLS_POLL_INTERVAL_MS = 1000
+const HLS_POLL_MAX_ATTEMPTS = 10
 
 const socket = io()
 
@@ -348,6 +355,73 @@ function setPreflightStatus(check, status, message = '') {
   if (iconEl) iconEl.textContent = iconMap[status] ?? '⏳'
   const msgEl = el.querySelector('.preflight-msg')
   if (msgEl) msgEl.textContent = message
+}
+
+// ── HLS validation ───────────────────────────────────────────────────────
+async function validateHlsOutput() {
+  if (!state.hlsBase || !state.channelId) return false
+  const url = `${state.hlsBase}/${encodeURIComponent(state.channelId)}/index.m3u8`
+  try {
+    const response = await fetch(url, { cache: 'no-store' })
+    if (!response.ok) return false
+
+    const contentType = response.headers.get('content-type') || ''
+    const normalizedContentType = contentType.toLowerCase()
+    const isHlsMimeType =
+      normalizedContentType.startsWith('application/vnd.apple.mpegurl') ||
+      normalizedContentType.startsWith('application/x-mpegurl') ||
+      normalizedContentType.startsWith('audio/mpegurl')
+
+    if (!isHlsMimeType) return false
+
+    const text = await response.text()
+    return text.includes('#EXTM3U')
+  } catch {
+    return false
+  }
+}
+
+function startHlsPolling() {
+  stopHlsPolling()
+  hlsPollCount = 0
+  setHlsValidationStatus('polling')
+
+  async function poll() {
+    hlsPollCount += 1
+    setHlsValidationStatus('polling') // update count in badge
+    const valid = await validateHlsOutput()
+    if (valid) {
+      setHlsValidationStatus('streaming')
+      hlsPollTimer = null
+      return
+    }
+    if (hlsPollCount >= HLS_POLL_MAX_ATTEMPTS) {
+      setHlsValidationStatus('unavailable')
+      hlsPollTimer = null
+      return
+    }
+    hlsPollTimer = window.setTimeout(poll, HLS_POLL_INTERVAL_MS)
+  }
+
+  hlsPollTimer = window.setTimeout(poll, HLS_POLL_INTERVAL_MS)
+}
+
+function stopHlsPolling() {
+  if (hlsPollTimer !== null) {
+    window.clearTimeout(hlsPollTimer)
+    hlsPollTimer = null
+  }
+}
+
+function setHlsValidationStatus(status) {
+  const statusMap = {
+    idle:        { text: 'Not started', tone: '' },
+    polling:     { text: `Validating\u2026 ${hlsPollCount}/${HLS_POLL_MAX_ATTEMPTS}`, tone: 'warning' },
+    streaming:   { text: 'Streaming',   tone: 'success' },
+    unavailable: { text: 'Not available', tone: 'danger' },
+  }
+  const { text, tone } = statusMap[status] ?? { text: status, tone: '' }
+  setBadge(elements.hlsValidationStatus, text, tone)
 }
 
 async function fetchBoothState() {
@@ -680,6 +754,7 @@ async function startLiveIngest() {
     }
 
     state.ingestConnected = true
+    if (state.hlsBase) startHlsPolling()
     socket.emit('booth:update-state', {
       booth_id: state.boothId,
       participant_id: state.participantId,
@@ -732,6 +807,8 @@ async function stopLiveIngest() {
       ingest_connected: false,
     })
   }
+  stopHlsPolling()
+  setHlsValidationStatus('idle')
   state.ingestConnected = false
   renderMicControls()
 }
