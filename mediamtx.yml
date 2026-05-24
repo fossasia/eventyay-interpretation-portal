@@ -38,6 +38,8 @@ webrtcLocalUDPAddress: :8189  # single UDP port for all ICE traffic (replaces de
 #                     until post-MVP per docs/detailedplan.md § 11.2.
 hlsAddress: :8888
 hlsEncryption: no
+# Allow the browser JS on :5000 to fetch the HLS playlist for validation (cross-origin)
+hlsAllowOrigin: '*'
 hlsAlwaysRemux: yes
 hlsSegmentDuration: 2s
 hlsSegmentMaxSize: 50MB
