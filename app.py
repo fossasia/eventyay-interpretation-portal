@@ -70,6 +70,8 @@ def interpreter_booth(booth_id: str) -> Any:
         default_jitsi_room=settings.default_jitsi_room,
         jitsi_domain=settings.jitsi_domain,
         aiortc_available=AIORTC_AVAILABLE,
+        mediamtx_whip_base=settings.mediamtx_whip_base,
+        mediamtx_hls_base=settings.mediamtx_hls_base,
     )
 
 
