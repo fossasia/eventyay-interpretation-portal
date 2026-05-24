@@ -38,6 +38,8 @@ class Settings:
     ingest_hls_root: Path
     hls_segment_seconds: int
     hls_playlist_length: int
+    mediamtx_whip_base: str
+    mediamtx_hls_base: str
 
 
 def load_settings() -> Settings:
@@ -53,6 +55,8 @@ def load_settings() -> Settings:
         ingest_hls_root=Path(os.getenv('INGEST_HLS_ROOT', './hls-output')).resolve(),
         hls_segment_seconds=int(os.getenv('HLS_SEGMENT_SECONDS', '2')),
         hls_playlist_length=int(os.getenv('HLS_PLAYLIST_LENGTH', '8')),
+        mediamtx_whip_base=os.getenv('MEDIAMTX_WHIP_BASE', 'http://localhost:8889'),
+        mediamtx_hls_base=os.getenv('MEDIAMTX_HLS_BASE', 'http://localhost:8888'),
     )
 
 

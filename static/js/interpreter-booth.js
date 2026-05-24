@@ -22,6 +22,8 @@ const state = {
   ingestReachable: portal.dataset.aiortcAvailable === 'true',
   defaultJitsiRoom: portal.dataset.defaultJitsi || '',
   jitsiDomain: portal.dataset.jitsiDomain || '',
+  whipBase: portal.dataset.whipBase || '',
+  hlsBase: portal.dataset.hlsBase || '',
 }
 
 const elements = {
@@ -171,6 +173,13 @@ async function fetchBoothState() {
 }
 
 async function fetchIngestReachability() {
+  if (state.whipBase) {
+    // WHIP path: MediaMTX is configured; treat as reachable. Actual connectivity
+    // is validated at publish time (startLiveIngest will surface errors on failure).
+    state.ingestReachable = true
+    return
+  }
+  // Legacy: check aiortc/FFmpeg reachability via Flask
   const response = await fetch(`/api/interpreter/status/${encodeURIComponent(state.channelId)}`)
   if (!response.ok) return
   const payload = await response.json()
@@ -274,7 +283,7 @@ async function startLiveIngest() {
     return
   }
   if (!state.ingestReachable) {
-    showError('Ingest backend is unavailable. Check aiortc/FFmpeg setup.')
+    showError('Ingest backend is unavailable. Check server configuration.')
     return
   }
   const isActive = state.activeInterpreterId === state.participantId
@@ -306,24 +315,43 @@ async function startLiveIngest() {
     await peerConnection.setLocalDescription(offer)
     await waitForIceGathering(peerConnection)
 
-    const response = await fetch(`/api/interpreter/connect/${encodeURIComponent(state.channelId)}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        booth_id: state.boothId,
-        participant_id: state.participantId,
-        language: state.language,
-        token: state.token,
-        type: peerConnection.localDescription.type,
-        sdp: peerConnection.localDescription.sdp,
-      }),
-    })
-    if (!response.ok) {
-      const payload = await response.json().catch(() => ({ error: response.statusText }))
-      throw new Error(payload.error || 'Ingest negotiation failed.')
+    if (state.whipBase) {
+      // WHIP path: POST raw SDP offer to MediaMTX; receive SDP answer as plain text.
+      // MediaMTX WHIP URL format is /{channelId}/whip (not /whip/{channelId}).
+      const whipUrl = `${state.whipBase}/${encodeURIComponent(state.channelId)}/whip`
+      const response = await fetch(whipUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/sdp' },
+        body: peerConnection.localDescription.sdp,
+      })
+      if (!response.ok) {
+        const detail = await response.text().catch(() => response.statusText)
+        throw new Error(`WHIP error ${response.status}: ${detail}`)
+      }
+      const answerSdp = await response.text()
+      await peerConnection.setRemoteDescription({ type: 'answer', sdp: answerSdp })
+    } else {
+      // Legacy: aiortc path via Flask
+      const response = await fetch(`/api/interpreter/connect/${encodeURIComponent(state.channelId)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          booth_id: state.boothId,
+          participant_id: state.participantId,
+          language: state.language,
+          token: state.token,
+          type: peerConnection.localDescription.type,
+          sdp: peerConnection.localDescription.sdp,
+        }),
+      })
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({ error: response.statusText }))
+        throw new Error(payload.error || 'Ingest negotiation failed.')
+      }
+      const answer = await response.json()
+      await peerConnection.setRemoteDescription(answer)
     }
-    const answer = await response.json()
-    await peerConnection.setRemoteDescription(answer)
+
     state.ingestConnected = true
     socket.emit('booth:update-state', {
       booth_id: state.boothId,
@@ -347,16 +375,19 @@ async function stopLiveIngest() {
     state.peerConnection = null
   }
   if (state.joined && state.participantId) {
-    await fetch(`/api/interpreter/disconnect/${encodeURIComponent(state.channelId)}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        booth_id: state.boothId,
-        participant_id: state.participantId,
-        language: state.language,
-        token: state.token,
-      }),
-    }).catch(() => {})
+    if (!state.whipBase) {
+      // Legacy: notify Flask to release the server-side aiortc peer connection
+      await fetch(`/api/interpreter/disconnect/${encodeURIComponent(state.channelId)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          booth_id: state.boothId,
+          participant_id: state.participantId,
+          language: state.language,
+          token: state.token,
+        }),
+      }).catch(() => {})
+    }
     socket.emit('booth:update-state', {
       booth_id: state.boothId,
       participant_id: state.participantId,
