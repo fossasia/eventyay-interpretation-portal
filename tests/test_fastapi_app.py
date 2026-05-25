@@ -23,6 +23,8 @@ def test_healthz_ok():
     body = res.json()
     assert body['ok'] is True
     assert body['server'] == 'fastapi'
+    assert 'mediamtx_ok' in body
+    assert 'aiortc_available' not in body
 
 
 def test_home_redirects_to_demo_booth():
@@ -58,7 +60,8 @@ def test_ingest_status_endpoint():
     assert res.status_code == 200
     body = res.json()
     assert body['channel_id'] == 'some-channel'
-    assert 'state' in body
+    assert body['state'] == 'mediamtx'
+    assert 'reachable' in body
 
 
 # ── WebSocket protocol tests ──────────────────────────────────────────────────

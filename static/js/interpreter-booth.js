@@ -21,14 +21,12 @@ const state = {
   peerConnection: null,
   micMuted: false,
   ingestConnected: false,
-  ingestReachable: portal.dataset.aiortcAvailable === 'true',
+  ingestReachable: Boolean(portal.dataset.whipBase),
   defaultJitsiRoom: portal.dataset.defaultJitsi || '',
   jitsiDomain: portal.dataset.jitsiDomain || '',
   whipBase: portal.dataset.whipBase || '',
   hlsBase: portal.dataset.hlsBase || '',
-  useLegacyIngest: portal.dataset.useLegacyIngest === 'true',
-  usedLegacyFallback: false,
-  micDeviceId: localStorage.getItem('mic-device-id') || '',
+  micDeviceId: localStorage.getItem('mic-device-id') || '',,
   preflight: {
     micPermission: 'pending',
     audioDevice: 'pending',
@@ -743,29 +741,6 @@ async function doWhipIngest(peerConnection) {
   await peerConnection.setRemoteDescription({ type: 'answer', sdp: answerSdp })
 }
 
-// Legacy aiortc path via FastAPI — kept for the migration period (USE_LEGACY_INGEST=true).
-// Phase 1D: remove this function and the /api/interpreter/connect route.
-async function doLegacyIngest(peerConnection) {
-  const response = await fetch(`/api/interpreter/connect/${encodeURIComponent(state.channelId)}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({
-      booth_id: state.boothId,
-      participant_id: state.participantId,
-      language: state.language,
-      token: state.token,
-      type: peerConnection.localDescription.type,
-      sdp: peerConnection.localDescription.sdp,
-    }),
-  })
-  if (!response.ok) {
-    const payload = await response.json().catch(() => ({ error: response.statusText }))
-    throw new Error(payload.error || 'Legacy ingest negotiation failed.')
-  }
-  const answer = await response.json()
-  await peerConnection.setRemoteDescription(answer)
-}
-
 async function startLiveIngest() {
   if (!state.joined || !state.participantId) {
     showError('Join the booth before going live.')
@@ -805,23 +780,9 @@ async function startLiveIngest() {
     await waitForIceGathering(peerConnection)
 
     if (state.whipBase) {
-      try {
-        await doWhipIngest(peerConnection)
-        state.usedLegacyFallback = false
-      } catch (whipError) {
-        if (state.useLegacyIngest) {
-          showError(`WHIP failed (${whipError.message}); retrying via legacy ingest…`)
-          await doLegacyIngest(peerConnection)
-          state.usedLegacyFallback = true
-        } else {
-          throw whipError
-        }
-      }
-    } else if (state.useLegacyIngest) {
-      await doLegacyIngest(peerConnection)
-      state.usedLegacyFallback = true
+      await doWhipIngest(peerConnection)
     } else {
-      throw new Error('No ingest path available. Set MEDIAMTX_WHIP_BASE or enable USE_LEGACY_INGEST.')
+      throw new Error('MEDIAMTX_WHIP_BASE is not configured. Set it in your .env and restart the server.')
     }
 
     state.ingestConnected = true
@@ -852,19 +813,6 @@ async function stopLiveIngest() {
     stopMicMeter()
   }
   if (state.joined && state.participantId) {
-    if (state.usedLegacyFallback) {
-      await fetch(`/api/interpreter/disconnect/${encodeURIComponent(state.channelId)}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({
-          booth_id: state.boothId,
-          participant_id: state.participantId,
-          language: state.language,
-          token: state.token,
-        }),
-      }).catch(() => {})
-      state.usedLegacyFallback = false
-    }
     wsSend({
       type: 'booth:update-state',
       mic_active: false,
