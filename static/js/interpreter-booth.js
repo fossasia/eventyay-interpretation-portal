@@ -19,6 +19,7 @@ const state = {
   chatMessages: [],
   micStream: null,
   peerConnection: null,
+  whipResourceUrl: null,
   micMuted: false,
   ingestConnected: false,
   ingestReachable: Boolean(portal.dataset.whipBase),
@@ -26,7 +27,7 @@ const state = {
   jitsiDomain: portal.dataset.jitsiDomain || '',
   whipBase: portal.dataset.whipBase || '',
   hlsBase: portal.dataset.hlsBase || '',
-  micDeviceId: localStorage.getItem('mic-device-id') || '',,
+  micDeviceId: localStorage.getItem('mic-device-id') || '',
   preflight: {
     micPermission: 'pending',
     audioDevice: 'pending',
@@ -307,6 +308,12 @@ function bindEventHandlers() {
     if (state.ingestConnected) {
       await stopLiveIngest()
     }
+    // Release mic stream on explicit leave (stopLiveIngest keeps it for relay handoff)
+    if (state.micStream) {
+      state.micStream.getTracks().forEach((t) => t.stop())
+      state.micStream = null
+      stopMicMeter()
+    }
     if (state.joined && state.participantId) {
       wsSend({ type: 'booth:leave' })
       state.joined = false
@@ -320,9 +327,11 @@ function bindEventHandlers() {
     renderMicControls()
   })
 
-  navigator.mediaDevices.addEventListener('devicechange', () => {
-    populateMicDevices().catch(() => {})
-  })
+  if (navigator.mediaDevices) {
+    navigator.mediaDevices.addEventListener('devicechange', () => {
+      populateMicDevices().catch(() => {})
+    })
+  }
 
   elements.participantList.addEventListener('click', (event) => {
     const target = event.target
@@ -510,15 +519,42 @@ function applyBoothState(payload) {
   state.participants = payload.participants || []
   state.activeInterpreterId = payload.active_interpreter_id || null
   state.chatMessages = payload.chat_messages || []
+
   const lostActivePublisher =
     state.ingestConnected &&
     state.participantId &&
     previousActiveInterpreterId === state.participantId &&
     state.activeInterpreterId !== state.participantId
+
+  // This client just became the active interpreter (e.g. coordinator switched)
+  const becameActive =
+    state.joined &&
+    state.participantId &&
+    state.activeInterpreterId === state.participantId &&
+    previousActiveInterpreterId !== state.participantId
+
   if (lostActivePublisher) {
     stopLiveIngest().catch((error) => {
       showError(`Unable to stop previous ingest session: ${error.message}`)
     })
+  }
+
+  if (becameActive && !state.ingestConnected && state.ingestReachable) {
+    // Delay slightly so the outgoing interpreter's WHIP session closes first,
+    // then auto-start on the same MediaMTX path — same HLS URL, no manual step.
+    window.setTimeout(() => {
+      // Force-unmute so audio flows immediately — no manual step required.
+      if (state.micMuted) {
+        state.micMuted = false
+        if (state.micStream) {
+          state.micStream.getAudioTracks().forEach((track) => { track.enabled = true })
+        }
+        renderMicControls()
+      }
+      startLiveIngest().catch((error) => {
+        showError(`Could not auto-start audio relay: ${error.message}`)
+      })
+    }, 1200)
   }
 }
 
@@ -566,13 +602,23 @@ function joinMonitoringFeed() {
 }
 
 async function populateMicDevices() {
+  if (!navigator.mediaDevices) {
+    // Non-secure context or unsupported browser — skip device enumeration gracefully
+    return
+  }
   try {
     const tempStream = await navigator.mediaDevices.getUserMedia({ audio: true })
     tempStream.getTracks().forEach((t) => t.stop())
   } catch {
     // Permission denied or no device — continue without labels
   }
-  const devices = await navigator.mediaDevices.enumerateDevices()
+  let devices = []
+  try {
+    devices = await navigator.mediaDevices.enumerateDevices()
+  } catch {
+    // Cannot enumerate — proceed without device list
+    return
+  }
   const audioInputs = devices.filter((d) => d.kind === 'audioinput')
   const previous = elements.micDeviceSelect.value
   elements.micDeviceSelect.innerHTML = ''
@@ -737,6 +783,13 @@ async function doWhipIngest(peerConnection) {
     const detail = await response.text().catch(() => response.statusText)
     throw new Error(`WHIP error ${response.status}: ${detail}`)
   }
+  // Save the WHIP resource URL so we can DELETE it for clean teardown.
+  // Explicit DELETE lets MediaMTX release the path immediately instead of
+  // waiting for ICE timeout (~5-10s), enabling fast relay handoff.
+  const location = response.headers.get('Location')
+  if (location) {
+    state.whipResourceUrl = new URL(location, whipUrl).href
+  }
   const answerSdp = await response.text()
   await peerConnection.setRemoteDescription({ type: 'answer', sdp: answerSdp })
 }
@@ -801,15 +854,26 @@ async function startLiveIngest() {
 }
 
 async function stopLiveIngest() {
+  // DELETE the WHIP session to release the MediaMTX path immediately.
+  // Use the resource URL from the Location header if captured; otherwise
+  // fall back to the standard WHIP endpoint for this channel.
+  // Only send DELETE if WHIP was actually connected (avoids spurious 404s).
+  if (state.ingestConnected || state.whipResourceUrl) {
+    const deleteUrl = state.whipResourceUrl
+      || (state.whipBase && state.channelId
+          ? `${state.whipBase}/${encodeURIComponent(state.channelId)}/whip`
+          : null)
+    state.whipResourceUrl = null
+    if (deleteUrl) fetch(deleteUrl, { method: 'DELETE' }).catch(() => {})
+  }
   if (state.peerConnection) {
     state.peerConnection.close()
     state.peerConnection = null
   }
-  if (state.micStream) {
-    state.micStream.getTracks().forEach((t) => t.stop())
-    state.micStream = null
-  }
-  if (!micTestStream) {
+  // Keep the mic stream alive so a relay handoff can reuse it without
+  // requesting mic permission again. The stream is stopped only when the
+  // participant explicitly leaves the booth.
+  if (!micTestStream && !state.micStream) {
     stopMicMeter()
   }
   if (state.joined && state.participantId) {
@@ -861,7 +925,10 @@ function render() {
 
 function renderParticipants() {
   const currentParticipant = state.participants.find((p) => p.participant_id === state.participantId)
-  const canReassign = currentParticipant?.role === 'coordinator'
+  // Coordinator or the currently-active interpreter may reassign any interpreter.
+  // This aligns with the server permission model (booth_state.set_active_interpreter).
+  const isActiveInterpreter = state.activeInterpreterId === state.participantId
+  const canReassign = currentParticipant?.role === 'coordinator' || isActiveInterpreter
   const activeParticipant = state.participants.find((p) => p.participant_id === state.activeInterpreterId)
   setBadge(
     elements.activeIndicator,

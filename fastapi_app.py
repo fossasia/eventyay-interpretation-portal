@@ -6,6 +6,7 @@ Start with:
 from __future__ import annotations
 
 import json
+import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -25,6 +26,9 @@ from portal.booth_state import BoothRegistry
 from portal.config import settings
 
 _BASE_DIR = Path(__file__).resolve().parent
+# Appended to static JS URLs so the browser always fetches fresh JS after
+# a server restart (prevents stale-cache issues during development).
+_JS_CACHE_BUST = str(int(time.time()))
 
 booths = BoothRegistry()
 
@@ -90,11 +94,12 @@ manager = ConnectionManager()
 
 async def _check_mediamtx() -> bool:
     """Non-blocking reachability check for MediaMTX HLS endpoint."""
-    if not settings.mediamtx_hls_base:
+    base = settings.effective_mediamtx_internal_base
+    if not base:
         return False
     try:
         async with httpx.AsyncClient(timeout=2.0) as client:
-            r = await client.head(f'{settings.mediamtx_hls_base}/')
+            r = await client.head(f'{base}/')
         return r.status_code < 500
     except (httpx.ConnectError, httpx.TimeoutException, httpx.RequestError):
         return False
@@ -176,6 +181,7 @@ async def interpreter_booth(
             'jitsi_domain': settings.jitsi_domain,
             'mediamtx_whip_base': settings.mediamtx_whip_base,
             'mediamtx_hls_base': settings.mediamtx_hls_base,
+            'js_version': _JS_CACHE_BUST,
         },
     )
 
@@ -281,7 +287,7 @@ async def _handle_set_active(ws: WebSocket, session: Session, data: dict) -> Non
         await ws.send_text(json.dumps({'type': 'booth:error', 'message': str(exc)}))
         return
     if previous_active and previous_active != target_id:
-        await asyncio.to_thread(ingest.disconnect, session.channel_id)
+        pass  # client is responsible for stopping its own ingest (WHIP teardown)
     await manager.broadcast(session.booth_id, {'type': 'booth:state', 'state': state})
 
 
