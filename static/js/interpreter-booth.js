@@ -507,12 +507,15 @@ async function fetchBoothState() {
 }
 
 async function fetchIngestReachability() {
-  if (state.whipBase) {
-    state.ingestReachable = true
+  // Always query the backend status endpoint so the UI reflects actual
+  // MediaMTX availability rather than assuming reachable whenever whipBase
+  // is configured. The early-return that forced ingestReachable=true when
+  // whipBase was set has been removed.
+  const response = await fetch(`/api/interpreter/status/${encodeURIComponent(state.channelId)}`)
+  if (!response.ok) {
+    state.ingestReachable = false
     return
   }
-  const response = await fetch(`/api/interpreter/status/${encodeURIComponent(state.channelId)}`)
-  if (!response.ok) return
   const payload = await response.json()
   state.ingestReachable = Boolean(payload.reachable)
 }
