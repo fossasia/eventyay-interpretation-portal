@@ -547,6 +547,11 @@ function applyBoothState(payload, { skipAutoStart = false } = {}) {
     }
     window.setTimeout(() => {
       state.relayingOut = false
+      // Restore track.enabled to match micMuted BEFORE stopping so that
+      // if this user becomes active again the tracks are in the right state.
+      if (state.micStream) {
+        state.micStream.getAudioTracks().forEach((t) => { t.enabled = !state.micMuted })
+      }
       stopLiveIngest().catch(() => {})
     }, 700)
   }
@@ -818,6 +823,12 @@ async function startLiveIngest() {
   }
   try {
     await ensureMicStream()
+    // Ensure track.enabled is consistent with micMuted before adding to the
+    // peer connection (guards against tracks being left disabled by a
+    // previous silence-mode handoff).
+    if (state.micStream) {
+      state.micStream.getAudioTracks().forEach((t) => { t.enabled = !state.micMuted })
+    }
     if (state.peerConnection) {
       state.peerConnection.close()
       state.peerConnection = null
@@ -911,6 +922,10 @@ function attemptRelayStart(attempt) {
     if (state.ingestConnected) return
     try {
       await ensureMicStream()
+      // Restore track.enabled (may have been muted during silence-mode handoff)
+      if (state.micStream) {
+        state.micStream.getAudioTracks().forEach((t) => { t.enabled = !state.micMuted })
+      }
       if (state.peerConnection) {
         state.peerConnection.close()
         state.peerConnection = null

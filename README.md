@@ -1,78 +1,64 @@
 # Eventyay Interpretation Portal
 
-A real-time interpretation coordination portal for Eventyay events.
-Interpreters stream audio via WebRTC/WHIP into MediaMTX; attendees listen via HLS.
-Coordination (who is active, which booth, relay pass) runs over WebSocket.
+Real-time interpretation coordination for Eventyay events.
+Interpreters stream live audio via WebRTC/WHIP → MediaMTX → HLS.
+Booth coordination (who is active, relay handoff, chat) runs over WebSocket.
 
 ---
 
-## Architecture
+## How it works
 
 ```
-Browser (interpreter)
-  │  WebRTC/WHIP offer/answer
+Interpreter browser
+  │  mic → RTCPeerConnection → WHIP POST
   ▼
-MediaMTX :8889 (WHIP ingest)
-  │  transcodes → HLS segments
+MediaMTX :8889 (WHIP ingest)          Python is never in the audio path
+  │  remux → HLS segments
   ▼
-MediaMTX :8888 (HLS output)
-  ▲
-  │  listens on HLS stream
-Browser (attendee)
+MediaMTX :8888 (HLS output) ←── attendees pull index.m3u8
 
-Browser (interpreter/coordinator)
+Interpreter / Coordinator browser
   │  WebSocket /ws/booth/{booth_id}
   ▼
-FastAPI portal :8000
-  │  in-memory booth state (asyncio)
-  ▼
-  broadcast to all booth participants
+FastAPI portal :8000 (coordination, state, JWT, REST)
 ```
 
-- **FastAPI + Uvicorn** — HTTP REST, Jinja2 templates, WebSocket
-- **MediaMTX** — audio server; Python is never in the media path
-- **No Flask, no Socket.IO, no aiortc**
+**Seamless interpreter handoff**: when the coordinator switches the active interpreter,
+the outgoing interpreter mutes its mic tracks but keeps the WHIP session alive for
+700 ms. MediaMTX never destroys the HLS muxer, so attendees see no 404 and need no
+browser refresh. The incoming interpreter retries WHIP every 400 ms (up to 6
+attempts) and connects cleanly once the outgoing side releases the path.
 
 ---
 
 ## Quick start (native)
 
-### Prerequisites
-
-- Python 3.13+
-- [uv](https://github.com/astral-sh/uv) package manager
-- [MediaMTX](https://github.com/bluenviron/mediamtx/releases) binary
-
-### 1 — Start MediaMTX
+**Requirements**: Python 3.13+, [uv](https://github.com/astral-sh/uv), [MediaMTX](https://github.com/bluenviron/mediamtx/releases)
 
 ```bash
-./mediamtx        # uses mediamtx.yml in repo root
-```
+# 1 — Start MediaMTX
+./mediamtx   # uses mediamtx.yml
 
-### 2 — Install dependencies & start the portal
-
-```bash
-cd eventyay-interpretation-portal
+# 2 — Start the portal
 uv sync
 uv run uvicorn fastapi_app:app --host 127.0.0.1 --port 8000 --reload
 ```
 
 Open http://localhost:8000
 
-### 3 — Environment
+### Environment
 
-Copy `.env.example` to `.env` and adjust:
+Copy `.env.example` → `.env` and adjust as needed:
 
 ```env
 HOST=127.0.0.1
 PORT=8000
 SECRET_KEY=change-me
-BOOTH_ACCESS_TOKEN=        # empty = no access control
-JWT_SECRET=                # empty = falls back to SECRET_KEY
+BOOTH_ACCESS_TOKEN=          # empty = no access control
+JWT_SECRET=                  # empty = falls back to SECRET_KEY
 MEDIAMTX_WHIP_BASE=http://localhost:8889
 MEDIAMTX_HLS_BASE=http://localhost:8888
-DEFAULT_JITSI_ROOM=https://meet.jit.si/eventyay-stage-room
-JITSI_DOMAIN=meet.jit.si
+MEDIAMTX_INTERNAL_BASE=      # Docker: http://mediamtx:8888
 ```
 
 ---
@@ -81,11 +67,8 @@ JITSI_DOMAIN=meet.jit.si
 
 ```bash
 docker compose up --build
+# portal on :8000  |  MediaMTX HLS :8888  |  WHIP :8889
 ```
-
-This starts:
-- `portal` — FastAPI app on port 8000
-- `mediamtx` — audio server on ports 8888 (HLS) and 8889 (WHIP)
 
 ---
 
@@ -93,70 +76,74 @@ This starts:
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/` | Redirect to demo booth |
-| `GET` | `/interpreter/{booth_id}` | Interpreter booth UI |
-| `POST` | `/api/auth/token` | Get a signed JWT |
-| `GET` | `/api/booth/{booth_id}/state` | Current booth state |
-| `GET` | `/api/interpreter/status/{channel_id}` | MediaMTX reachability check |
-| `GET` | `/healthz` | Health check (JSON) |
-| `WS` | `/ws/booth/{booth_id}` | Booth coordination WebSocket |
+| `GET`  | `/` | Redirect to demo booth |
+| `GET`  | `/interpreter/{booth_id}` | Interpreter booth UI |
+| `POST` | `/api/auth/token` | Issue a signed JWT |
+| `GET`  | `/api/booth/{booth_id}/state` | Current booth snapshot |
+| `GET`  | `/api/interpreter/status/{channel_id}` | MediaMTX reachability |
+| `GET`  | `/healthz` | Health check (`{"ok": true, "server": "fastapi"}`) |
+| `WS`   | `/ws/booth/{booth_id}` | Booth coordination WebSocket |
 
-### WebSocket message types (client → server)
+### WebSocket protocol (client → server)
 
-| Type | Purpose |
-|------|---------|
-| `booth:join` | Join a booth (interpreter or coordinator) |
-| `booth:leave` | Leave gracefully |
-| `booth:update-state` | Update mic/ingest status |
-| `booth:set-active` | Coordinator assigns active interpreter |
-| `booth:chat` | Send a text message to the booth |
+| Message type | Fields | Purpose |
+|---|---|---|
+| `booth:join` | `display_name`, `role`, `language`, `channel_id` | Enter a booth |
+| `booth:leave` | — | Leave gracefully |
+| `booth:update-state` | `mic_active`, `ingest_connected` | Report audio state |
+| `booth:set-active` | `target_id` | Coordinator/active interp assigns new active |
+| `booth:chat` | `body` | Send a message to all booth participants |
+
+Server broadcasts `booth:state` to all connections on every state change.
 
 ---
 
 ## Development
 
-### Run tests
-
 ```bash
-uv sync --all-groups   # install runtime + dev dependencies
-uv run pytest tests/ -v
+uv sync --all-groups          # runtime + dev dependencies
+uv run pytest tests/ -v       # 27 tests
+node --check static/js/interpreter-booth.js   # JS syntax
 ```
 
 ### Project layout
 
 ```
-fastapi_app.py              # single FastAPI application entrypoint
+fastapi_app.py                # FastAPI app — REST, WebSocket, Jinja2
 portal/
-  config.py                 # pydantic-settings Settings class
-  auth.py                   # JWT create/validate helpers
-  booth_state.py            # async in-memory booth registry
+  config.py                   # pydantic-settings (env vars / .env)
+  auth.py                     # JWT issue / validate
+  booth_state.py              # async in-memory booth registry
 templates/
-  interpreter_booth.html    # Jinja2 HTML template
+  base.html
+  interpreter_booth.html      # Jinja2 template
 static/
-  js/interpreter-booth.js   # Plain browser JS — WebRTC/WHIP + WebSocket client
-  css/
-mediamtx.yml                # MediaMTX server configuration
-docker-compose.yml          # portal + mediamtx services
-Dockerfile                  # FastAPI container
+  js/interpreter-booth.js     # Plain browser JS — WebRTC/WHIP + WebSocket
+  css/interpreter.css
+mediamtx.yml                  # MediaMTX config (HLS 1 s segments, WHIP ingest)
+docker-compose.yml            # portal + mediamtx services
+Dockerfile                    # FastAPI container (uv, Python 3.13-slim)
 tests/
   conftest.py
-  test_fastapi_app.py
-  test_booth_state.py
+  test_fastapi_app.py         # REST + WebSocket integration tests
+  test_booth_state.py         # booth registry unit tests
 ```
 
 ---
 
 ## Deployment
 
-For production, set:
+For production set strong secrets and point MediaMTX to your domain:
 
 ```env
-SECRET_KEY=<strong-random-key>
-BOOTH_ACCESS_TOKEN=<token-interpreters-must-provide>
-JWT_SECRET=<strong-random-key>
+SECRET_KEY=<random-256-bit>
+BOOTH_ACCESS_TOKEN=<shared-secret-for-interpreters>
+JWT_SECRET=<random-256-bit>
 MEDIAMTX_WHIP_BASE=https://media.your-domain.com:8889
 MEDIAMTX_HLS_BASE=https://media.your-domain.com:8888
+MEDIAMTX_INTERNAL_BASE=http://mediamtx:8888   # internal Docker network
 ```
+
 
 Run behind an HTTPS reverse proxy (nginx/Caddy). WebSocket upgrade must be proxied correctly.
 MediaMTX WHIP endpoint must be accessible from interpreter browsers (HTTPS + CORS configured in `mediamtx.yml`).

@@ -5,14 +5,16 @@ WORKDIR /app
 # Install uv
 RUN pip install --no-cache-dir uv
 
-# Copy dependency manifests first for cache efficiency
+# Copy dependency manifests first for cache efficiency.
+# Use --no-install-project so uv only installs third-party packages at this
+# layer (the project itself is installed after the source is copied, which
+# maximises Docker layer caching when only code — not deps — changes).
 COPY pyproject.toml uv.lock ./
+RUN uv sync --no-dev --frozen --no-install-project
 
-# Install runtime dependencies only (no dev group)
-RUN uv sync --no-dev --frozen
-
-# Copy application code
+# Copy application code and install the project into the same venv
 COPY . .
+RUN uv sync --no-dev --frozen
 
 EXPOSE 8000
 
