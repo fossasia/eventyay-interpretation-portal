@@ -41,7 +41,7 @@ jobs:
         run: uv sync --all-groups
 
       - name: Validate JS syntax
-        run: node --input-type=module < static/js/interpreter-booth.js || node --check static/js/interpreter-booth.js
+        run: node --check static/js/interpreter-booth.js
 
       - name: Run tests
         run: uv run pytest tests/ -v

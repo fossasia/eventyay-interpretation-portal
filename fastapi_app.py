@@ -366,7 +366,7 @@ async def ws_booth(websocket: WebSocket, booth_id: str) -> None:
 
 def main() -> None:
     import uvicorn
-    uvicorn.run('fastapi_app:app', host=settings.host, port=8000, reload=settings.debug)
+    uvicorn.run('fastapi_app:app', host=settings.host, port=settings.port, reload=settings.debug)
 
 
 if __name__ == '__main__':

@@ -95,7 +95,7 @@ This starts:
 |--------|------|-------------|
 | `GET` | `/` | Redirect to demo booth |
 | `GET` | `/interpreter/{booth_id}` | Interpreter booth UI |
-| `POST` | `/api/token` | Get a signed JWT |
+| `POST` | `/api/auth/token` | Get a signed JWT |
 | `GET` | `/api/booth/{booth_id}/state` | Current booth state |
 | `GET` | `/api/interpreter/status/{channel_id}` | MediaMTX reachability check |
 | `GET` | `/healthz` | Health check (JSON) |
@@ -118,6 +118,7 @@ This starts:
 ### Run tests
 
 ```bash
+uv sync --all-groups   # install runtime + dev dependencies
 uv run pytest tests/ -v
 ```
 
@@ -132,7 +133,7 @@ portal/
 templates/
   interpreter_booth.html    # Jinja2 HTML template
 static/
-  js/interpreter-booth.js   # Alpine.js + WebRTC/WHIP + WebSocket
+  js/interpreter-booth.js   # Plain browser JS — WebRTC/WHIP + WebSocket client
   css/
 mediamtx.yml                # MediaMTX server configuration
 docker-compose.yml          # portal + mediamtx services

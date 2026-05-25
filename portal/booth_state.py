@@ -73,11 +73,20 @@ class BoothRegistry:
         self._lock = asyncio.Lock()
 
     def _get_or_create_booth(self, booth_id: str, language: str, channel_id: str) -> Booth:
-        """Return existing booth or create one. Caller must hold self._lock."""
+        """Return existing booth or create one. Caller must hold self._lock.
+
+        If the booth already exists and non-empty ``language``/``channel_id`` values
+        are supplied, update those fields so subsequent snapshots stay consistent.
+        """
         booth = self._booths.get(booth_id)
         if booth is None:
             booth = Booth(booth_id=booth_id, language=language, channel_id=channel_id)
             self._booths[booth_id] = booth
+        else:
+            if language.strip():
+                booth.language = language.strip()
+            if channel_id.strip():
+                booth.channel_id = channel_id.strip()
         return booth
 
     async def snapshot(self, booth_id: str, language: str, channel_id: str) -> dict:

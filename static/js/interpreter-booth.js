@@ -1009,34 +1009,53 @@ function renderParticipants() {
     const canActivateSelf = participant.participant_id === state.participantId
     const canActivate = participant.role === 'interpreter' && (canReassign || canActivateSelf)
     const isThisActive = participant.participant_id === state.activeInterpreterId
-    const ingestLabel = participant.ingest_connected ? 'ingest connected' : 'ingest idle'
+
+    // Build participant tile using DOM construction (no innerHTML) to prevent XSS.
+    const top = document.createElement('div')
+    top.className = 'participant-top'
+    const nameEl = document.createElement('strong')
+    nameEl.textContent = participant.display_name
+    const rolePill = document.createElement('span')
+    rolePill.className = `participant-pill${isThisActive ? ' live' : ''}`
+    rolePill.textContent = isThisActive ? 'LIVE' : participant.role
+    top.append(nameEl, rolePill)
+
+    const meta = document.createElement('div')
+    meta.className = 'participant-meta'
+    meta.textContent = `${participant.language} \u00b7 ${participant.channel_id}`
+
+    const bottom = document.createElement('div')
+    bottom.className = 'participant-bottom'
+    const pillGroup = document.createElement('div')
+    const micPill = document.createElement('span')
+    micPill.className = 'participant-pill'
+    micPill.textContent = participant.mic_active ? 'mic active' : 'mic muted'
+    const ingestPill = document.createElement('span')
+    ingestPill.className = 'participant-pill'
+    ingestPill.textContent = participant.ingest_connected ? 'ingest connected' : 'ingest idle'
+    pillGroup.append(micPill, ingestPill)
+    bottom.append(pillGroup)
+
     // Set Active / Active button:
     //   active tile  → green "Active" badge (visible to all, no action needed)
     //   non-active   → "Set Active" button only if this user can reassign
-    let activeButton = ''
     if (participant.role === 'interpreter') {
+      const btn = document.createElement('button')
+      btn.type = 'button'
       if (isThisActive) {
-        activeButton = `<button type="button" class="btn btn-active-status" disabled>Active</button>`
+        btn.className = 'btn btn-active-status'
+        btn.disabled = true
+        btn.textContent = 'Active'
+        bottom.append(btn)
       } else if (canActivate) {
-        activeButton = `<button type="button" class="btn set-active-btn" data-participant-id="${participant.participant_id}">Set Active</button>`
+        btn.className = 'btn set-active-btn'
+        btn.dataset.participantId = participant.participant_id
+        btn.textContent = 'Set Active'
+        bottom.append(btn)
       }
     }
-    tile.innerHTML = `
-      <div class="participant-top">
-        <strong>${escapeHtml(participant.display_name)}</strong>
-        <span class="participant-pill ${isThisActive ? 'live' : ''}">
-          ${isThisActive ? 'LIVE' : participant.role}
-        </span>
-      </div>
-      <div class="participant-meta">${escapeHtml(participant.language)} · ${escapeHtml(participant.channel_id)}</div>
-      <div class="participant-bottom">
-        <div>
-          <span class="participant-pill">${participant.mic_active ? 'mic active' : 'mic muted'}</span>
-          <span class="participant-pill">${ingestLabel}</span>
-        </div>
-        ${activeButton}
-      </div>
-    `
+
+    tile.append(top, meta, bottom)
     elements.participantList.append(tile)
   }
 }
@@ -1050,13 +1069,15 @@ function renderChat() {
   for (const message of state.chatMessages.slice(-100)) {
     const entry = document.createElement('article')
     entry.className = 'chat-entry'
-    entry.innerHTML = `
-      <header>
-        <strong>${escapeHtml(message.sender_name)}</strong>
-        <span>${formatTime(message.sent_at)}</span>
-      </header>
-      <p>${escapeHtml(message.body)}</p>
-    `
+    const header = document.createElement('header')
+    const senderEl = document.createElement('strong')
+    senderEl.textContent = message.sender_name
+    const timeEl = document.createElement('span')
+    timeEl.textContent = formatTime(message.sent_at)
+    header.append(senderEl, timeEl)
+    const bodyEl = document.createElement('p')
+    bodyEl.textContent = message.body
+    entry.append(header, bodyEl)
     elements.chatLog.append(entry)
   }
   elements.chatLog.scrollTop = elements.chatLog.scrollHeight

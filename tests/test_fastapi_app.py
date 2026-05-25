@@ -4,8 +4,9 @@ from __future__ import annotations
 import json
 import os
 
-# Ensure auth is disabled for tests
-os.environ.setdefault('BOOTH_ACCESS_TOKEN', '')
+# Force auth off for all tests — setdefault would not override an already-set env var,
+# so use an unconditional assignment to guarantee a deterministic baseline.
+os.environ['BOOTH_ACCESS_TOKEN'] = ''
 
 import pytest
 from fastapi.testclient import TestClient
@@ -380,22 +381,15 @@ def test_ws_full_flow_join_update_chat_leave():
     assert all(p['participant_id'] != pid for p in participants)
 
 
-def test_ws_auth_required_with_token():
+def test_ws_auth_required_with_token(monkeypatch):
     """When BOOTH_ACCESS_TOKEN is set, a valid JWT is needed to use the API."""
-    import os
-    original = os.environ.get('BOOTH_ACCESS_TOKEN', '')
-    os.environ['BOOTH_ACCESS_TOKEN'] = 'secret-test-token'
-    try:
-        from portal.config import settings
-        settings.__dict__['booth_access_token'] = 'secret-test-token'
-        # Without credentials, POST /api/auth/token should still issue a token
-        # (the endpoint itself issues the JWT when the provided token matches)
-        res = client.post('/api/auth/token', json={'token': 'secret-test-token'})
-        assert res.status_code == 200
-        assert 'access_token' in res.json()
-    finally:
-        os.environ['BOOTH_ACCESS_TOKEN'] = original
-        settings.__dict__['booth_access_token'] = original
+    from portal.config import settings
+    monkeypatch.setenv('BOOTH_ACCESS_TOKEN', 'secret-test-token')
+    monkeypatch.setattr(settings, 'booth_access_token', 'secret-test-token')
+    # When the provided token matches BOOTH_ACCESS_TOKEN, the endpoint issues a JWT.
+    res = client.post('/api/auth/token', json={'token': 'secret-test-token'})
+    assert res.status_code == 200
+    assert 'access_token' in res.json()
 
 
 def test_ws_coordinator_can_switch_active_interpreter():
