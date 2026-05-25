@@ -17,6 +17,7 @@ const state = {
   participants: [],
   activeInterpreterId: null,
   chatMessages: [],
+  relayingOut: false,   // true while outgoing interp is in silence-mode handoff
   micStream: null,
   peerConnection: null,
   whipResourceUrl: null,
@@ -536,27 +537,32 @@ function applyBoothState(payload, { skipAutoStart = false } = {}) {
     previousActiveInterpreterId !== state.participantId
 
   if (lostActivePublisher) {
-    stopLiveIngest().catch((error) => {
-      showError(`Unable to stop previous ingest session: ${error.message}`)
-    })
+    // Silence-mode handoff: mute the mic tracks so we send silence while
+    // keeping the WHIP connection alive. MediaMTX keeps the HLS path up
+    // (no muxer teardown) so viewers never see a 404. After 700 ms the
+    // incoming interpreter has had time to claim the path, then we stop.
+    state.relayingOut = true
+    if (state.micStream) {
+      state.micStream.getAudioTracks().forEach((t) => { t.enabled = false })
+    }
+    window.setTimeout(() => {
+      state.relayingOut = false
+      stopLiveIngest().catch(() => {})
+    }, 700)
   }
 
   if (!skipAutoStart && becameActive && !state.ingestConnected && state.ingestReachable) {
-    // Wait briefly for the outgoing interpreter's WHIP DELETE to be processed
-    // by MediaMTX (DELETE is now sent immediately, so 300 ms is enough).
-    // Then auto-start so the booth stream resumes with no manual step.
-    window.setTimeout(() => {
-      if (state.micMuted) {
-        state.micMuted = false
-        if (state.micStream) {
-          state.micStream.getAudioTracks().forEach((track) => { track.enabled = true })
-        }
-        renderMicControls()
+    // Unmute immediately so audio is ready the moment WHIP connects.
+    if (state.micMuted) {
+      state.micMuted = false
+      if (state.micStream) {
+        state.micStream.getAudioTracks().forEach((t) => { t.enabled = true })
       }
-      startLiveIngest().catch((error) => {
-        showError(`Could not auto-start audio relay: ${error.message}`)
-      })
-    }, 300)
+      renderMicControls()
+    }
+    // Try WHIP right away. Outgoing interpreter is in silence mode for ~700ms,
+    // so we may get 409 Conflict. attemptRelayStart retries every 400ms.
+    attemptRelayStart(0)
   }
 }
 
@@ -889,6 +895,61 @@ async function stopLiveIngest() {
   setHlsValidationStatus('idle')
   state.ingestConnected = false
   renderMicControls()
+}
+
+// Retry intervals for WHIP on relay handoff (ms from previous attempt).
+// Outgoing interpreter stops at ~700ms, so the 800ms mark (2 × 400ms) wins.
+const _RELAY_RETRY_INTERVAL_MS = 400
+const _RELAY_MAX_ATTEMPTS = 6
+
+function attemptRelayStart(attempt) {
+  if (attempt >= _RELAY_MAX_ATTEMPTS) return
+  window.setTimeout(async () => {
+    // Bail if conditions changed while waiting
+    if (!state.joined || !state.participantId) return
+    if (state.activeInterpreterId !== state.participantId) return
+    if (state.ingestConnected) return
+    try {
+      await ensureMicStream()
+      if (state.peerConnection) {
+        state.peerConnection.close()
+        state.peerConnection = null
+      }
+      const pc = new RTCPeerConnection()
+      state.peerConnection = pc
+      state.micStream.getAudioTracks().forEach((t) => pc.addTrack(t, state.micStream))
+      pc.addEventListener('connectionstatechange', () => {
+        if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+          setBadge(elements.ingestStatus, 'Ingest reconnecting', 'warning')
+        }
+        if (pc.connectionState === 'connected') {
+          setBadge(elements.ingestStatus, 'Ingest connected', 'success')
+        }
+      })
+      const offer = await pc.createOffer({ offerToReceiveAudio: false, offerToReceiveVideo: false })
+      await pc.setLocalDescription(offer)
+      await waitForIceGathering(pc)
+      if (!state.whipBase) throw new Error('MEDIAMTX_WHIP_BASE is not configured')
+      await doWhipIngest(pc)
+      state.ingestConnected = true
+      if (state.hlsBase) startHlsPolling()
+      wsSend({ type: 'booth:update-state', mic_active: !state.micMuted, ingest_connected: true })
+      showError('')
+    } catch (error) {
+      if (state.peerConnection) {
+        state.peerConnection.close()
+        state.peerConnection = null
+      }
+      state.whipResourceUrl = null
+      // 409 = path busy (outgoing interpreter still in silence mode); retry
+      if (error.message.includes('409') && attempt < _RELAY_MAX_ATTEMPTS - 1) {
+        attemptRelayStart(attempt + 1)
+        return
+      }
+      showError(`Could not start relay: ${error.message}`)
+    }
+    renderMicControls()
+  }, attempt === 0 ? 0 : _RELAY_RETRY_INTERVAL_MS)
 }
 
 function passRelayToNextInterpreter() {

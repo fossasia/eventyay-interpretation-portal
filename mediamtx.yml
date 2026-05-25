@@ -41,7 +41,9 @@ hlsEncryption: no
 # Allow the browser JS on :5000 to fetch the HLS playlist for validation (cross-origin)
 hlsAllowOrigin: '*'
 hlsAlwaysRemux: yes
-hlsSegmentDuration: 2s
+# 1 s segments reduce the first-segment wait after interpreter switch to ~1 s
+# (down from 2 s) while still giving viewers 3 s of buffer (3 segments × 1 s).
+hlsSegmentDuration: 1s
 hlsSegmentMaxSize: 50MB
 # hlsPartDuration: 200ms   # uncomment to enable LL-HLS (post-MVP)
 
