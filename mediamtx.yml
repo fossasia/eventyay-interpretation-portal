@@ -23,6 +23,13 @@ logDestinations: [stdout]
 webrtcAddress: :8889
 webrtcEncryption: no
 webrtcLocalUDPAddress: :8189  # single UDP port for all ICE traffic (replaces deprecated webrtcICEUDPMuxAddress)
+# When MediaMTX runs inside Docker, its auto-detected host IP is the
+# container-internal address (e.g. 172.17.0.x), which browsers on the host
+# cannot reach. Adding 127.0.0.1 ensures the SDP answer includes a
+# localhost ICE candidate so the browser can connect via the port-forwarded
+# UDP port 8189.
+webrtcAdditionalHosts:
+  - 127.0.0.1
 
 # ── HLS output ──────────────────────────────────────────────────────────────
 # Playlists and segments are served at http://host:8888/{path}/index.m3u8.
@@ -39,7 +46,7 @@ webrtcLocalUDPAddress: :8189  # single UDP port for all ICE traffic (replaces de
 hlsAddress: :8888
 hlsEncryption: no
 # Allow the browser JS on :8000 (FastAPI portal) to fetch the HLS playlist for validation (cross-origin)
-hlsAllowOrigin: '*'
+hlsAllowOrigins: ['*']
 hlsAlwaysRemux: yes
 # 1 s segments reduce the first-segment wait after interpreter switch to ~1 s
 # (down from 2 s) while still giving viewers 3 s of buffer (3 segments × 1 s).
