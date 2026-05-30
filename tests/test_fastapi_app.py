@@ -40,6 +40,17 @@ def test_interpreter_booth_page_renders():
     assert b'test-booth' in res.content
 
 
+def test_interpreter_booth_jitsi_url_uses_base_url():
+    """Jitsi URL in the booth page must use the configured base URL, not
+    a hard-coded http:// scheme, to avoid mixed-content on HTTPS deployments."""
+    res = client.get('/interpreter/test-booth')
+    assert res.status_code == 200
+    from portal.config import settings
+    expected_prefix = settings.effective_jitsi_base_url
+    # The rendered <input> value should start with the base URL
+    assert expected_prefix.encode() in res.content
+
+
 def test_auth_token_no_password():
     """When BOOTH_ACCESS_TOKEN is empty, any (or empty) token grants a JWT."""
     res = client.post('/api/auth/token', json={'token': ''})

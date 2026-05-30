@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     booth_access_token: str = ''
     default_jitsi_room: str = 'eventyay-stage-room'
     jitsi_domain: str = 'localhost:8080'
+    # Full Jitsi base URL including scheme. When empty, defaults to
+    # http://{jitsi_domain}. Set to https://... for production HTTPS.
+    jitsi_base_url: str = ''
     mediamtx_whip_base: str = 'http://localhost:8889'
     mediamtx_hls_base: str = 'http://localhost:8888'
     # Internal URL for health checks (defaults to mediamtx_hls_base).
@@ -30,6 +33,10 @@ class Settings(BaseSettings):
     @property
     def effective_mediamtx_internal_base(self) -> str:
         return self.mediamtx_internal_base or self.mediamtx_hls_base
+
+    @property
+    def effective_jitsi_base_url(self) -> str:
+        return self.jitsi_base_url or f'http://{self.jitsi_domain}'
     # JWT configuration — jwt_secret defaults to secret_key when empty
     jwt_secret: str = ''
     jwt_expiry_seconds: int = 86400
