@@ -479,3 +479,110 @@ async def test_list_booths_for_event_empty():
     result = await registry.list_booths_for_event('nonexistent')
 
     assert result == []
+
+
+# ── Namespace isolation (get_booth / get_booth_for_event / validate_booth_event) ──
+
+
+@pytest.mark.anyio
+async def test_get_booth_returns_existing():
+    registry = BoothRegistry()
+    await registry.create_booth(event_slug='pycon2026', language_code='en', language='English')
+    result = await registry.get_booth('pycon2026-en')
+    assert result is not None
+    assert result['booth_id'] == 'pycon2026-en'
+
+
+@pytest.mark.anyio
+async def test_get_booth_returns_none_for_missing():
+    registry = BoothRegistry()
+    result = await registry.get_booth('nonexistent-booth')
+    assert result is None
+
+
+@pytest.mark.anyio
+async def test_get_booth_for_event_returns_matching():
+    registry = BoothRegistry()
+    await registry.create_booth(event_slug='pycon2026', language_code='fr', language='French')
+    result = await registry.get_booth_for_event('pycon2026', 'fr')
+    assert result is not None
+    assert result['booth_id'] == 'pycon2026-fr'
+    assert result['event_slug'] == 'pycon2026'
+    assert result['language_code'] == 'fr'
+
+
+@pytest.mark.anyio
+async def test_get_booth_for_event_returns_none_wrong_event():
+    registry = BoothRegistry()
+    await registry.create_booth(event_slug='pycon2026', language_code='en', language='English')
+    result = await registry.get_booth_for_event('fossasia', 'en')
+    assert result is None
+
+
+@pytest.mark.anyio
+async def test_get_booth_for_event_returns_none_wrong_language():
+    registry = BoothRegistry()
+    await registry.create_booth(event_slug='pycon2026', language_code='en', language='English')
+    result = await registry.get_booth_for_event('pycon2026', 'de')
+    assert result is None
+
+
+@pytest.mark.anyio
+async def test_validate_booth_event_passes_for_correct_event():
+    registry = BoothRegistry()
+    # Should not raise
+    await registry.validate_booth_event('pycon2026-en', 'pycon2026')
+
+
+@pytest.mark.anyio
+async def test_validate_booth_event_rejects_wrong_event():
+    registry = BoothRegistry()
+    with pytest.raises(PermissionError, match="does not belong"):
+        await registry.validate_booth_event('pycon2026-en', 'fossasia')
+
+
+@pytest.mark.anyio
+async def test_validate_booth_event_rejects_malformed_id():
+    registry = BoothRegistry()
+    with pytest.raises(PermissionError, match="does not belong"):
+        await registry.validate_booth_event('bad', 'pycon2026')
+
+
+@pytest.mark.anyio
+async def test_cross_event_isolation_booths_invisible():
+    """Booths from event A must not appear in event B listings."""
+    registry = BoothRegistry()
+    await registry.create_booth(event_slug='eventa', language_code='en', language='English')
+    await registry.create_booth(event_slug='eventa', language_code='fr', language='French')
+    await registry.create_booth(event_slug='eventb', language_code='de', language='German')
+
+    a_booths = await registry.list_booths_for_event('eventa')
+    b_booths = await registry.list_booths_for_event('eventb')
+
+    assert len(a_booths) == 2
+    assert len(b_booths) == 1
+    assert all(b['event_slug'] == 'eventa' for b in a_booths)
+    assert all(b['event_slug'] == 'eventb' for b in b_booths)
+
+    # get_booth_for_event also isolates
+    assert await registry.get_booth_for_event('eventa', 'de') is None
+    assert await registry.get_booth_for_event('eventb', 'en') is None
+    assert (await registry.get_booth_for_event('eventb', 'de'))['booth_id'] == 'eventb-de'
+
+
+@pytest.mark.anyio
+async def test_cross_event_participants_isolated():
+    """Participants in event A booth must not appear in event B booth."""
+    registry = BoothRegistry()
+    await registry.create_booth(event_slug='eventa', language_code='en', language='English')
+    await registry.create_booth(event_slug='eventb', language_code='en', language='English')
+
+    await registry.join_participant(
+        booth_id='eventa-en', display_name='Alice', role='interpreter',
+        language='English', channel_id='eventa/en',
+    )
+
+    a_state = await registry.get_booth('eventa-en')
+    b_state = await registry.get_booth('eventb-en')
+    assert len(a_state['participants']) == 1
+    assert len(b_state['participants']) == 0
