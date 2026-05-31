@@ -1,4 +1,4 @@
-name: Tests
+name: CI
 
 on:
   push:
@@ -16,14 +16,20 @@ on:
 
   workflow_dispatch:
 
-jobs:
-  test:
-    runs-on: ubuntu-latest
+# Cancel superseded runs on the same PR / branch
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
+# ────────────────────────────────────────────────────────────────
+jobs:
+
+  # ── 1. Unit tests + lint (fast, no Docker) ───────────────────
+  unit-tests:
+    runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version:
-          - "3.13"
+        python-version: ["3.13"]
 
     steps:
       - name: Checkout repository
@@ -41,7 +47,161 @@ jobs:
         run: uv sync --all-groups
 
       - name: Validate JS syntax
-        run: node --check static/js/interpreter-booth.js
+        run: |
+          node --check static/js/interpreter-booth.js
+          node --check static/js/whep-listener.js
 
-      - name: Run tests
+      - name: Run unit tests
         run: uv run pytest tests/ -v
+
+  # ── 2. Docker build + full-stack smoke test ──────────────────
+  docker-smoke:
+    runs-on: ubuntu-latest
+    needs: unit-tests          # only build images if unit tests pass
+
+    env:
+      SECRET_KEY: ci-test-secret-key-not-for-production
+      BOOTH_ACCESS_TOKEN: ci-test-token
+      DOCKER_HOST_ADDRESS: 127.0.0.1
+      JITSI_DOMAIN: localhost:8080
+      MEDIAMTX_WHIP_BASE: http://localhost:8889
+      MEDIAMTX_HLS_BASE: http://localhost:8888
+      MEDIAMTX_API_BASE: http://mediamtx:9997
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # ── Build all images ────────────────────────────────────
+      - name: Build portal image
+        run: docker compose build portal
+
+      # ── Start the full stack ────────────────────────────────
+      - name: Start all services
+        run: docker compose up -d
+
+      - name: Show running containers
+        run: docker compose ps
+
+      # ── Wait for health ─────────────────────────────────────
+      - name: Wait for portal to be healthy
+        run: |
+          echo "Waiting for portal healthcheck..."
+          for i in $(seq 1 30); do
+            health=$(docker inspect --format='{{.State.Health.Status}}' "$(docker compose ps -q portal)" 2>/dev/null || echo "missing")
+            echo "  attempt $i: $health"
+            if [ "$health" = "healthy" ]; then
+              echo "Portal is healthy!"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "ERROR: Portal did not become healthy within 90 seconds"
+          docker compose logs portal
+          exit 1
+
+      - name: Wait for MediaMTX to accept connections
+        run: |
+          echo "Waiting for MediaMTX HLS endpoint..."
+          for i in $(seq 1 20); do
+            if curl -sf http://localhost:8888/ > /dev/null 2>&1; then
+              echo "MediaMTX HLS is up!"
+              break
+            fi
+            echo "  attempt $i: not ready"
+            sleep 3
+          done
+
+          echo "Waiting for MediaMTX WHIP/WHEP endpoint..."
+          for i in $(seq 1 20); do
+            # 404 is expected (no path published) — we just need a response
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8889/ 2>/dev/null || echo "000")
+            if [ "$code" != "000" ]; then
+              echo "MediaMTX WebRTC endpoint is up (HTTP $code)!"
+              break
+            fi
+            echo "  attempt $i: not ready"
+            sleep 3
+          done
+
+          echo "Waiting for MediaMTX Control API..."
+          for i in $(seq 1 20); do
+            if curl -sf http://localhost:9997/v3/paths/list > /dev/null 2>&1; then
+              echo "MediaMTX Control API is up!"
+              break
+            fi
+            echo "  attempt $i: not ready"
+            sleep 3
+          done
+
+      - name: Wait for Jitsi web
+        run: |
+          echo "Waiting for Jitsi web UI..."
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/ 2>/dev/null || echo "000")
+            if [ "$code" = "200" ] || [ "$code" = "301" ] || [ "$code" = "302" ]; then
+              echo "Jitsi web is up (HTTP $code)!"
+              break
+            fi
+            echo "  attempt $i: HTTP $code"
+            sleep 3
+          done
+
+      # ── Smoke tests — hit every endpoint ────────────────────
+      - name: Portal health endpoint
+        run: |
+          resp=$(curl -sf http://localhost:8000/healthz)
+          echo "$resp"
+          echo "$resp" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['ok'], 'healthz not ok'"
+
+      - name: Portal serves interpreter page
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8000/interpreter/ci-booth?token=ci-test-token)
+          echo "GET /interpreter/ci-booth → HTTP $code"
+          [ "$code" = "200" ] || { echo "FAIL: expected 200"; exit 1; }
+
+      - name: Portal serves WHEP listener page
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8000/listener-webrtc/ci-booth)
+          echo "GET /listener-webrtc/ci-booth → HTTP $code"
+          [ "$code" = "200" ] || { echo "FAIL: expected 200"; exit 1; }
+
+      - name: Portal serves HLS listener page
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8000/listen/ci-booth)
+          echo "GET /listen/ci-booth → HTTP $code"
+          [ "$code" = "200" ] || { echo "FAIL: expected 200"; exit 1; }
+
+      - name: Portal ingest-status API
+        run: |
+          resp=$(curl -sf http://localhost:8000/api/ingest-status/ci-booth)
+          echo "$resp"
+          echo "$resp" | python3 -c "import sys,json; d=json.load(sys.stdin); assert 'whip_url' in d"
+
+      - name: MediaMTX Control API lists paths
+        run: |
+          resp=$(curl -sf http://localhost:9997/v3/paths/list)
+          echo "$resp"
+          echo "$resp" | python3 -c "import sys,json; json.load(sys.stdin)"
+
+      - name: Static JS files are served
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8000/static/js/interpreter-booth.js)
+          echo "interpreter-booth.js → HTTP $code"
+          [ "$code" = "200" ] || { echo "FAIL"; exit 1; }
+
+          code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8000/static/js/whep-listener.js)
+          echo "whep-listener.js → HTTP $code"
+          [ "$code" = "200" ] || { echo "FAIL"; exit 1; }
+
+      # ── Collect logs on failure ─────────────────────────────
+      - name: Dump logs on failure
+        if: failure()
+        run: docker compose logs --tail=100
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
