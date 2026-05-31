@@ -76,6 +76,7 @@ jobs:
       MEDIAMTX_WHIP_BASE: http://localhost:8889
       MEDIAMTX_HLS_BASE: http://localhost:8888
       MEDIAMTX_API_BASE: http://mediamtx:9997
+      ADMIN_PASSWORD: ci-admin-pass
 
     steps:
       - name: Checkout repository
@@ -198,8 +199,6 @@ jobs:
           assert_http "http://${CI_HOST}:${PORTAL_PORT}/register" "GET /register"
 
       - name: Admin panel login and CRUD smoke test
-        env:
-          ADMIN_PASSWORD: admin
         run: |
           BASE="http://${CI_HOST}:${PORTAL_PORT}"
 
@@ -209,7 +208,7 @@ jobs:
           [ "$code" = "200" ] || { echo "FAIL"; exit 1; }
 
           # Admin login with correct password → redirect + cookie
-          resp=$(curl -s -D - -o /dev/null -X POST "${BASE}/admin/login" -d "password=admin")
+          resp=$(curl -s -D - -o /dev/null -X POST "${BASE}/admin/login" -d "password=ci-admin-pass")
           echo "$resp" | head -5
           echo "$resp" | grep -qi "set-cookie.*admin_token" || { echo "FAIL: no admin_token cookie"; exit 1; }
 
