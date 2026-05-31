@@ -356,6 +356,34 @@ class BoothRegistry:
                 if booth.event_slug == event_slug
             ]
 
+    async def get_booth(self, booth_id: str) -> dict | None:
+        """Return the public dict for an existing booth, or None."""
+        async with self._lock:
+            booth = self._booths.get(booth_id)
+            return booth.as_public_dict() if booth is not None else None
+
+    async def get_booth_for_event(self, event_slug: str, language_code: str) -> dict | None:
+        """Return the booth for a specific event + language, or None.
+
+        Unlike :meth:`snapshot`, this never auto-creates a booth.
+        """
+        booth_id = make_booth_id(event_slug, language_code)
+        return await self.get_booth(booth_id)
+
+    async def validate_booth_event(self, booth_id: str, expected_event: str) -> None:
+        """Raise PermissionError if *booth_id* does not belong to *expected_event*.
+
+        Used by event-scoped API endpoints to prevent cross-event access.
+        """
+        try:
+            event_slug, _ = parse_booth_id(booth_id)
+        except ValueError:
+            event_slug = ''
+        if event_slug != expected_event:
+            raise PermissionError(
+                f"Booth '{booth_id}' does not belong to event '{expected_event}'."
+            )
+
     async def set_ingest_status(self, booth_id: str, status: str, language: str, channel_id: str) -> dict:
         async with self._lock:
             booth = self._get_or_create_booth(booth_id, language, channel_id)

@@ -132,11 +132,11 @@ Existing free-form booth IDs (e.g. `hall-a-fr`) that happen to end with a valid 
 ## 7. Runtime components in this repository
 
 - `fastapi_app.py`
-  - FastAPI routes, WebSocket event handlers, JWT auth, Jinja2 templates, health checks
+  - FastAPI routes (legacy + event-scoped), WebSocket event handlers with cross-event validation, `_resolve_whip_url` shared helper, JWT auth, Jinja2 templates, health checks
 - `portal/booth_identity.py`
   - booth identity scheme: validation (event slug, ISO 639-1 language code, instance), booth ID generation, MediaMTX path mapping, bidirectional conversion
 - `portal/booth_state.py`
-  - async in-memory booth registry, participant role policy, active interpreter ownership, handoff state, chat history
+  - async in-memory booth registry, participant role policy, active interpreter ownership, handoff state, chat history, event-scoped queries (`get_booth`, `get_booth_for_event`, `validate_booth_event`)
 - `portal/auth.py`
   - JWT token creation and validation (PyJWT)
 - `portal/config.py`
@@ -209,6 +209,17 @@ Layer 1: booth_state  →  role + active-interpreter check  (PermissionError)
 Layer 2: /whip-url    →  gated WHIP URL endpoint          (HTTP 403)
 Layer 3: MediaMTX     →  overridePublisher: yes            (old publisher kicked)
 ```
+
+## 9.1 Multi-event namespace isolation
+
+Event-scoped API endpoints (`/api/events/{event_slug}/booths/...`) enforce strict
+namespace isolation:
+
+- `list_booths_for_event(event_slug)` filters the in-memory registry by event_slug.
+- `get_booth_for_event(event_slug, language_code)` returns `None` (not a new booth) if the combination doesn't exist.
+- `validate_booth_event(booth_id, expected_event)` raises `PermissionError` if the booth's parsed event_slug doesn't match — used by event-scoped WHIP URL endpoint and WebSocket join handler.
+- MediaMTX paths embed the event slug (`{event_slug}/{language_code}`), so audio streams are physically separated per event.
+- WebSocket join with a mismatched `event_slug` field is rejected before the participant is added to the booth.
 
 ## 10. Reconnect and teardown behavior
 
