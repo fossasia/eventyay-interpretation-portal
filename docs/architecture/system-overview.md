@@ -40,15 +40,23 @@
 │  │         MediaMTX (bluenviron/mediamtx:1)   │                          │
 │  │                                             │                          │
 │  │  WHIP endpoint :8889                       │                          │
-│  │  HLS  endpoint :8888                       │                          │
+│  │  WHEP endpoint :8889 (same port, /whep)    │                          │
+│  │  HLS  endpoint :8888 (fallback)            │                          │
+│  │  Control API   :9997                       │                          │
 │  │  overridePublisher for handoff             │                          │
 │  └────────────────────┬────────────────────────┘                          │
 │                       │ .m3u8 + .ts segments                              │
 │                       ▼                                                   │
 │  ┌──────────────────────────────────────────────────┐                    │
-│  │  Listener page /listen/{booth_id}                │                    │
+│  │  WHEP Listener page /listener-webrtc/{booth_id}  │                    │
 │  │                                                  │                    │
-│  │  hls.js player with auto-recovery               │                    │
+│  │  WebRTC WHEP player (primary, <1s latency)       │                    │
+│  └──────────────────────────────────────────────────┘                    │
+│                                                                           │
+│  ┌──────────────────────────────────────────────────┐                    │
+│  │  HLS Listener page /listen/{booth_id}            │                    │
+│  │                                                  │                    │
+│  │  hls.js player with auto-recovery (fallback)     │                    │
 │  └──────────────────────────────────────────────────┘                    │
 │                                                                           │
 │  ┌──────────────────────────────────────────────────┐                    │
@@ -71,7 +79,8 @@
 | Interpreter booth page | `templates/interpreter_booth.html` | Server-rendered booth page with all panels |
 | Booth JavaScript | `static/js/interpreter-booth.js` | Central state machine, WebSocket wiring, UI logic |
 | Jitsi embed helpers | `static/js/interpreter-booth.js` | Jitsi URL parsing and embed URL construction |
-| Listener page | `templates/listen.html` | HLS listener page with hls.js |
+| Listener page (WHEP) | `templates/listener-webrtc.html` | WHEP WebRTC listener (primary) |
+| Listener page (HLS) | `templates/listen.html` | HLS listener page with hls.js (fallback) |
 
 ### Backend (FastAPI + WebSocket)
 
@@ -94,7 +103,7 @@
 
 | Service | Image | Purpose |
 |---|---|---|
-| MediaMTX | `bluenviron/mediamtx:1` | WHIP ingest (:8889) and HLS delivery (:8888) |
+| MediaMTX | `bluenviron/mediamtx:1` | WHIP ingest (:8889), WHEP playback (:8889), HLS fallback (:8888), Control API (:9997) |
 | Jitsi Web | `jitsi/web:stable-9823` | Self-hosted Jitsi frontend (HTTP :8080, HTTPS :8443) |
 | Jitsi Prosody | `jitsi/prosody:stable-9823` | XMPP server for Jitsi |
 | Jitsi Jicofo | `jitsi/jicofo:stable-9823` | Jitsi conference focus |
@@ -112,7 +121,7 @@ Speaker → Jitsi meeting → Jitsi iframe in interpreter console → interprete
 
 The Jitsi iframe loads with `startWithAudioMuted=false` (it plays floor audio) but `startWithVideoMuted=true` and `disableInitialGUM=true` so the interpreter's mic/camera is never accidentally published into the Jitsi call. Jitsi is self-hosted via Docker containers (stable-9823), served on HTTP port :8080 (development) or HTTPS :8443 (production).
 
-### Ingest path (WHIP → HLS)
+### Ingest path (WHIP → WHEP/HLS)
 
 ```
 Interpreter mic
@@ -120,11 +129,11 @@ Interpreter mic
   → RTCPeerConnection (audio track only)
   → WHIP POST to MediaMTX :8889
   → MediaMTX receives WebRTC stream
-  → MediaMTX produces HLS segments
-  → HLS available at MediaMTX :8888/{channel_id}/playlist.m3u8
+  ├──→ WHEP at :8889/{channel_id}/whep (primary, <1s latency)
+  └──→ HLS segments at :8888/{channel_id}/playlist.m3u8 (fallback, ~3s latency)
 ```
 
-Python never touches audio. The browser publishes directly to MediaMTX via WHIP. MediaMTX handles all transcoding and HLS segmentation.
+Python never touches audio. The browser publishes directly to MediaMTX via WHIP. MediaMTX serves listeners via WHEP (sub-second) or HLS (fallback).
 
 ### Coordination path (WebSocket)
 

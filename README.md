@@ -1,7 +1,8 @@
 # Eventyay Interpretation Portal
 
 Real-time interpretation coordination for Eventyay events.
-Interpreters stream live audio via WebRTC/WHIP → MediaMTX → HLS.
+Interpreters stream live audio via WebRTC/WHIP → MediaMTX → WHEP (WebRTC playback).
+HLS is retained as a fallback delivery path.
 Booth coordination (who is active, relay handoff, chat) runs over WebSocket.
 
 ---
@@ -12,10 +13,10 @@ Booth coordination (who is active, relay handoff, chat) runs over WebSocket.
 Interpreter browser
   │  mic → RTCPeerConnection → WHIP POST
   ▼
-MediaMTX :8889 (WHIP ingest)          Python is never in the audio path
-  │  remux → HLS segments
-  ▼
-MediaMTX :8888 (HLS output) ←── attendees pull index.m3u8
+MediaMTX :8889 (WHIP ingest + WHEP)   Python is never in the audio path
+  │  WebRTC termination + remux
+  ├──► WHEP :8889 (primary) ←── attendees connect via WebRTC (sub-second latency)
+  └──► HLS  :8888 (fallback) ←── attendees pull index.m3u8 (~2-3 s latency)
 
 Interpreter / Coordinator browser
   │  WebSocket /ws/booth/{booth_id}
@@ -25,8 +26,10 @@ FastAPI portal :8000 (coordination, state, JWT, REST)
 
 **Seamless interpreter handoff**: when the coordinator switches the active interpreter,
 MediaMTX's `overridePublisher: yes` lets the incoming interpreter connect immediately
-while kicking the outgoing one. Attendees using the `/listen/{booth_id}` page (hls.js)
-auto-recover from the brief ~2 s HLS muxer reset.
+while kicking the outgoing one. MediaMTX paths are created with `alwaysAvailable: true`
+via the Control API so WHEP listeners stay connected during handoff and receive the
+new publisher's audio within ~1.5–3 s. HLS fallback listeners auto-recover with a
+longer gap (~10–15 s).
 
 ---
 
@@ -47,8 +50,9 @@ Open http://localhost:8000. That is it.
 | Service | Port | Purpose |
 |---------|------|---------|
 | FastAPI portal | 8000 | Web UI, REST API, WebSocket |
-| MediaMTX HLS | 8888 | Audio stream for attendees |
-| MediaMTX WHIP | 8889 | Audio ingest from interpreters |
+| MediaMTX WHEP/WHIP | 8889 | WebRTC playback (WHEP) and ingest (WHIP) |
+| MediaMTX HLS | 8888 | HLS fallback stream for attendees |
+| MediaMTX Control API | 9997 | Dynamic path management (alwaysAvailable) |
 | Jitsi Web | 8443 | Self-hosted video conferencing (interpreter monitors speaker) |
 | Jitsi JVB | 10000/udp | Jitsi media traffic |
 
@@ -97,9 +101,10 @@ curl http://localhost:8000/healthz
 1. Open http://localhost:8000/interpreter/demo-booth
 2. Enter a name, select **Interpreter**, click **Join Booth**
 3. Click **Go Live** — allow microphone when prompted
-4. Open http://localhost:8000/listen/demo-booth in another tab (hls.js auto-recovery player)
+4. Open http://localhost:8000/listener-webrtc/demo-booth in another tab (WHEP WebRTC listener, sub-second latency)
+   — or http://localhost:8000/listen/demo-booth for the HLS fallback (hls.js, ~3 s delay)
    — or use VLC: File → Open Network → `http://localhost:8888/demo-booth-audio/index.m3u8`
-5. Speak — you should hear yourself with ~3 s delay
+5. Speak — you should hear yourself with <1 s delay on the WHEP listener
 
 ### Environment variables
 
@@ -114,6 +119,7 @@ Copy `.env.example` → `.env` and adjust as needed:
 | `MEDIAMTX_WHIP_BASE` | `http://localhost:8889` | Browser-facing WHIP URL |
 | `MEDIAMTX_HLS_BASE` | `http://localhost:8888` | Browser-facing HLS URL |
 | `MEDIAMTX_INTERNAL_BASE` | *(empty)* | Python→MediaMTX URL (Docker: `http://mediamtx:8888`) |
+| `MEDIAMTX_API_BASE` | `http://localhost:9997` | MediaMTX Control API for dynamic path management |
 | `JVB_AUTH_PASSWORD` | `changeme` | Jitsi JVB auth (change in production) |
 | `JICOFO_AUTH_PASSWORD` | `changeme` | Jitsi Jicofo auth (change in production) |
 
@@ -125,7 +131,8 @@ Copy `.env.example` → `.env` and adjust as needed:
 |--------|------|-------------|
 | `GET`  | `/` | Redirect to demo booth |
 | `GET`  | `/interpreter/{booth_id}` | Interpreter booth UI |
-| `GET`  | `/listen/{booth_id}` | Attendee listener (hls.js) |
+| `GET`  | `/listener-webrtc/{booth_id}` | Attendee WHEP listener (WebRTC, primary) |
+| `GET`  | `/listen/{booth_id}` | Attendee HLS listener (hls.js, fallback) |
 | `POST` | `/api/auth/token` | Issue a signed JWT |
 | `GET`  | `/api/booth/{booth_id}/state` | Current booth snapshot |
 | `GET`  | `/api/interpreter/status/{channel_id}` | MediaMTX reachability |
@@ -164,11 +171,13 @@ portal/
   booth_state.py              # async in-memory booth registry
 templates/
   interpreter_booth.html      # Jinja2 interpreter booth page
-  listener.html               # Jinja2 attendee page (hls.js)
+  listener.html               # Jinja2 attendee page (hls.js fallback)
+  listener-webrtc.html        # Jinja2 attendee page (WHEP WebRTC, primary)
 static/
   js/interpreter-booth.js     # Plain browser JS — WebRTC/WHIP + WebSocket
+  js/whep-listener.js         # WHEP WebRTC listener client
   css/interpreter.css
-mediamtx.yml                  # MediaMTX config (HLS 1 s segments, WHIP)
+mediamtx.yml                  # MediaMTX config (WHIP ingest, WHEP playback, HLS fallback, Control API)
 docker-compose.yml            # portal + mediamtx + jitsi services
 Dockerfile                    # FastAPI container (uv, Python 3.13-slim)
 tests/

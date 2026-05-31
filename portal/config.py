@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     # can reach MediaMTX via Docker's internal network, while the browser
     # uses MEDIAMTX_HLS_BASE=http://localhost:8888 (the host-mapped port).
     mediamtx_internal_base: str = ''
+    # MediaMTX Control API (port 9997). Used to dynamically create named
+    # paths with alwaysAvailable so WHEP readers survive publisher handoffs.
+    mediamtx_api_base: str = 'http://localhost:9997'
 
     @property
     def effective_mediamtx_internal_base(self) -> str:

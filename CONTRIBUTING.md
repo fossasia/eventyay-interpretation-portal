@@ -49,7 +49,7 @@ All 27 tests must pass before opening a PR. The same checks run in CI
 
 ## Architecture constraints
 
-- **Python is never in the audio path.** Audio flows: browser mic → WHIP → MediaMTX → HLS → attendee. Do not add aiortc or similar.
+- **Python is never in the audio path.** Audio flows: browser mic → WHIP → MediaMTX → WHEP/HLS → attendee. Do not add aiortc or similar.
 - **No Flask, no Socket.IO.** FastAPI + native WebSocket is the sole backend.
 - **In-memory state only.** `BoothRegistry` lives in process memory. Do not add a database dependency without a design discussion.
 - **Booth fields are immutable after creation.** `language` and `channel_id` on a `Booth` object are set on first join and not overwritten.
@@ -58,8 +58,11 @@ All 27 tests must pass before opening a PR. The same checks run in CI
 
 The seamless interpreter-switch relies on the silence-mode handoff in
 `static/js/interpreter-booth.js → applyBoothState`. If you change timing
-constants (`700 ms` outgoing silence window, `400 ms` retry interval), test with
-a real MediaMTX instance and VLC to verify HLS continuity.
+constants (`700 ms` outgoing silence window, `200 ms` retry interval), test with
+a real MediaMTX instance to verify WHEP and HLS continuity.
+
+WHEP listeners recover in ~1.5–3 s (RTCPeerConnection stays open via
+`alwaysAvailable` paths). HLS fallback listeners take ~10–15 s to recover.
 
 ## Dependency management
 
