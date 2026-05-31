@@ -349,3 +349,107 @@ async def test_as_public_dict_includes_room_id():
 
     assert 'room_id' in state
     assert state['room_id'] == 100
+
+
+# ── Layer 1: active-interpreter enforcement tests ─────────────────────────────
+
+@pytest.mark.anyio
+async def test_coordinator_cannot_set_mic_active():
+    """Coordinator role must not be allowed to mark mic or ingest active."""
+    registry = BoothRegistry()
+    await join(registry, 'Interpreter A')
+    coordinator = await join(registry, 'Coordinator', role='coordinator')
+
+    with pytest.raises(PermissionError, match='Only interpreter role'):
+        await registry.update_participant_state(
+            'hall-a-fr',
+            coordinator.participant_id,
+            'French',
+            'hall-a-fr-audio',
+            mic_active=True,
+        )
+
+
+@pytest.mark.anyio
+async def test_listener_cannot_set_ingest_connected():
+    """Listener role must not be allowed to mark ingest connected."""
+    registry = BoothRegistry()
+    await join(registry, 'Interpreter A')
+    listener = await join(registry, 'Listener', role='listener')
+
+    with pytest.raises(PermissionError, match='Only interpreter role'):
+        await registry.update_participant_state(
+            'hall-a-fr',
+            listener.participant_id,
+            'French',
+            'hall-a-fr-audio',
+            ingest_connected=True,
+        )
+
+
+@pytest.mark.anyio
+async def test_check_publish_permission_active_interpreter_passes():
+    """Active interpreter passes the publish permission check."""
+    registry = BoothRegistry()
+    interpreter = await join(registry, 'Interpreter A')
+
+    # Should not raise
+    await registry.check_publish_permission(
+        'hall-a-fr', interpreter.participant_id, 'French', 'hall-a-fr-audio',
+    )
+
+
+@pytest.mark.anyio
+async def test_check_publish_permission_standby_interpreter_rejected():
+    """Standby interpreter fails the publish permission check."""
+    registry = BoothRegistry()
+    await join(registry, 'Interpreter A')
+    interpreter_b = await join(registry, 'Interpreter B')
+
+    with pytest.raises(PermissionError, match='active interpreter'):
+        await registry.check_publish_permission(
+            'hall-a-fr', interpreter_b.participant_id, 'French', 'hall-a-fr-audio',
+        )
+
+
+@pytest.mark.anyio
+async def test_check_publish_permission_coordinator_rejected():
+    """Coordinator role fails the publish permission check."""
+    registry = BoothRegistry()
+    coordinator = await join(registry, 'Coordinator', role='coordinator')
+
+    with pytest.raises(PermissionError, match='Only interpreter role'):
+        await registry.check_publish_permission(
+            'hall-a-fr', coordinator.participant_id, 'French', 'hall-a-fr-audio',
+        )
+
+
+@pytest.mark.anyio
+async def test_check_publish_permission_unknown_participant():
+    """Unknown participant_id raises ValueError."""
+    registry = BoothRegistry()
+    await join(registry, 'Interpreter A')
+
+    with pytest.raises(ValueError, match='does not exist'):
+        await registry.check_publish_permission(
+            'hall-a-fr', 'unknown-id', 'French', 'hall-a-fr-audio',
+        )
+
+
+@pytest.mark.anyio
+async def test_active_interpreter_can_turn_off_mic():
+    """Active interpreter can set mic_active=False (non-publisher state)."""
+    registry = BoothRegistry()
+    interpreter = await join(registry, 'Interpreter A')
+
+    await registry.update_participant_state(
+        'hall-a-fr', interpreter.participant_id, 'French', 'hall-a-fr-audio',
+        mic_active=True,
+    )
+    state = await registry.update_participant_state(
+        'hall-a-fr', interpreter.participant_id, 'French', 'hall-a-fr-audio',
+        mic_active=False,
+    )
+
+    participants = {p['participant_id']: p for p in state['participants']}
+    assert participants[interpreter.participant_id]['mic_active'] is False

@@ -303,6 +303,8 @@ class BoothRegistry:
             if participant is None:
                 raise ValueError('Participant does not exist in booth.')
             wants_publisher_state = mic_active is True or ingest_connected is True
+            if wants_publisher_state and participant.role != 'interpreter':
+                raise PermissionError('Only interpreter role can publish audio.')
             if wants_publisher_state and booth.active_interpreter_id != participant_id:
                 raise PermissionError('Only the active interpreter can mark mic or ingest active.')
             if mic_active is not None:
@@ -316,6 +318,29 @@ class BoothRegistry:
                 'connected' if any(p.ingest_connected for p in booth.participants.values()) else 'disconnected'
             )
             return booth.as_public_dict()
+
+    async def check_publish_permission(
+        self,
+        booth_id: str,
+        participant_id: str,
+        language: str,
+        channel_id: str,
+    ) -> None:
+        """Raise PermissionError if participant may not publish audio.
+
+        Checks two conditions (Layer 1 enforcement):
+        1. Participant must have the ``interpreter`` role.
+        2. Participant must be the booth's active interpreter.
+        """
+        async with self._lock:
+            booth = self._get_or_create_booth(booth_id, language, channel_id)
+            participant = booth.participants.get(participant_id)
+            if participant is None:
+                raise ValueError('Participant does not exist in booth.')
+            if participant.role != 'interpreter':
+                raise PermissionError('Only interpreter role can publish audio.')
+            if booth.active_interpreter_id != participant_id:
+                raise PermissionError('Only the active interpreter can publish audio.')
 
     async def is_active_interpreter(self, booth_id: str, participant_id: str, language: str, channel_id: str) -> bool:
         async with self._lock:

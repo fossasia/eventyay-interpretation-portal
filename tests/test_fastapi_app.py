@@ -491,3 +491,109 @@ def test_ws_coordinator_can_switch_active_interpreter():
     assert state_msg is not None, 'Expected a booth:state after set-active'
     assert state_msg['state']['active_interpreter_id'] == pid_a
 
+
+# ── Layer 2: WHIP URL gated endpoint tests ────────────────────────────────────
+
+def test_whip_url_active_interpreter_gets_url():
+    """Active interpreter receives a WHIP URL from the gated endpoint."""
+    booth = 'whip-gate-booth'
+    channel = f'{booth}-audio'
+    with client.websocket_connect(f'/ws/booth/{booth}') as ws:
+        ws.send_text(json.dumps({
+            'type': 'booth:join', 'display_name': 'Active',
+            'role': 'interpreter', 'language': 'English', 'channel_id': channel,
+        }))
+        joined = json.loads(ws.receive_text())
+        if joined['type'] != 'booth:joined':
+            joined = json.loads(ws.receive_text())
+        pid = joined['participant_id']
+        ws.receive_text()  # drain booth:state
+
+        res = client.get(
+            f'/api/booth/{booth}/whip-url',
+            params={'participant_id': pid, 'language': 'English', 'channel': channel},
+        )
+
+    assert res.status_code == 200
+    body = res.json()
+    assert 'whip_url' in body
+    assert body['channel_id'] == channel
+    assert body['booth_id'] == booth
+    assert body['whip_url'].endswith(f'/{channel}/whip')
+
+
+def test_whip_url_standby_interpreter_rejected():
+    """Standby interpreter receives 403 from the WHIP URL endpoint."""
+    booth = 'whip-standby-booth'
+    channel = f'{booth}-audio'
+    with client.websocket_connect(f'/ws/booth/{booth}') as ws_a, \
+         client.websocket_connect(f'/ws/booth/{booth}') as ws_b:
+
+        # IntA joins first → becomes active
+        ws_a.send_text(json.dumps({
+            'type': 'booth:join', 'display_name': 'IntA',
+            'role': 'interpreter', 'language': 'English', 'channel_id': channel,
+        }))
+        ws_a.receive_text()  # booth:joined
+        ws_a.receive_text()  # booth:state
+        ws_b.receive_text()  # booth:state broadcast
+
+        # IntB joins → standby
+        ws_b.send_text(json.dumps({
+            'type': 'booth:join', 'display_name': 'IntB',
+            'role': 'interpreter', 'language': 'English', 'channel_id': channel,
+        }))
+        joined_b = json.loads(ws_b.receive_text())
+        if joined_b['type'] != 'booth:joined':
+            joined_b = json.loads(ws_b.receive_text())
+        pid_b = joined_b['participant_id']
+        ws_b.receive_text()  # drain booth:state
+        ws_a.receive_text()  # drain broadcast to ws_a
+
+        res = client.get(
+            f'/api/booth/{booth}/whip-url',
+            params={'participant_id': pid_b, 'language': 'English', 'channel': channel},
+        )
+
+    assert res.status_code == 403
+    assert 'active interpreter' in res.json()['detail'].lower()
+
+
+def test_whip_url_coordinator_rejected():
+    """Coordinator role receives 403 from the WHIP URL endpoint."""
+    booth = 'whip-coord-booth'
+    channel = f'{booth}-audio'
+    with client.websocket_connect(f'/ws/booth/{booth}') as ws:
+        ws.send_text(json.dumps({
+            'type': 'booth:join', 'display_name': 'Coord',
+            'role': 'coordinator', 'language': 'English', 'channel_id': channel,
+        }))
+        joined = json.loads(ws.receive_text())
+        if joined['type'] != 'booth:joined':
+            joined = json.loads(ws.receive_text())
+        pid = joined['participant_id']
+        ws.receive_text()  # drain booth:state
+
+        res = client.get(
+            f'/api/booth/{booth}/whip-url',
+            params={'participant_id': pid, 'language': 'English', 'channel': channel},
+        )
+
+    assert res.status_code == 403
+    assert 'interpreter role' in res.json()['detail'].lower()
+
+
+def test_whip_url_unknown_participant_returns_404():
+    """Unknown participant_id returns 404."""
+    res = client.get(
+        '/api/booth/whip-404-booth/whip-url',
+        params={'participant_id': 'nonexistent', 'language': 'English'},
+    )
+    assert res.status_code == 404
+
+
+def test_whip_url_missing_participant_id_returns_422():
+    """Missing required participant_id query param returns 422."""
+    res = client.get('/api/booth/whip-missing-booth/whip-url')
+    assert res.status_code == 422
+

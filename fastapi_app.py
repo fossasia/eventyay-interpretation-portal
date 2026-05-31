@@ -309,6 +309,34 @@ async def booth_state_api(
     return await booths.snapshot(booth_id, language, channel_id, room_id=room)
 
 
+@app.get('/api/booth/{booth_id}/whip-url')
+async def booth_whip_url(
+    booth_id: str,
+    participant_id: str = Query(...),
+    token: str = Query(''),
+    language: str = 'English',
+    channel: str | None = Query(None),
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+) -> dict:
+    """Return the WHIP ingest URL only if the caller is the active interpreter.
+
+    Layer 2 enforcement: the browser must call this endpoint before starting
+    a WHIP session. Non-active interpreters and non-interpreter roles receive
+    a 403 response and never learn the WHIP URL.
+    """
+    _require_access(credentials, token)
+    channel_id = channel or f'{booth_id}-audio'
+    try:
+        await booths.check_publish_permission(booth_id, participant_id, language, channel_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+    await _ensure_mediamtx_path(channel_id)
+    whip_url = f'{settings.mediamtx_whip_base}/{channel_id}/whip'
+    return {'whip_url': whip_url, 'channel_id': channel_id, 'booth_id': booth_id}
+
+
 
 @app.get('/api/interpreter/status/{channel_id}')
 async def ingest_status_api(channel_id: str) -> dict:

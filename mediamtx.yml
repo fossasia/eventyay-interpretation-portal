@@ -103,6 +103,13 @@ apiAddress: :9997
 #
 # overridePublisher: when a new WHIP publisher connects to a path that already
 # has one, MediaMTX kicks the old publisher and accepts the new one.
+#
+# ENFORCEMENT LAYER 3 — Media-level single-publisher guarantee:
+# If a rogue or stale WHIP session bypasses the application-level checks
+# (Layer 1: booth_state role + active-interpreter validation, Layer 2:
+# /api/booth/{booth_id}/whip-url gated endpoint), MediaMTX itself ensures
+# only one publisher is live per path at any time. The old publisher is
+# disconnected immediately when a new one arrives.
 pathDefaults:
   record: no             # disable on-disk recording for local dev
   overridePublisher: yes

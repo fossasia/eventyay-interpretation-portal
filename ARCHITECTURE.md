@@ -175,16 +175,40 @@ Existing free-form booth IDs (e.g. `hall-a-fr`) that happen to end with a valid 
 
 The browser keeps only local UI/session state: joined participant id, mic stream, peer connection, current booth snapshot, and current chat messages. Server state remains the source of truth for who is active.
 
-## 9. Active interpreter enforcement
+## 9. Active interpreter enforcement — three-layer model
+
+Three independent layers prevent unauthorized audio publishing. Each layer is tested independently so a failure in one layer does not compromise the others.
+
+### Layer 1 — Application state (booth_state.py)
+
+`BoothRegistry.update_participant_state()` rejects any attempt to set `mic_active=True` or `ingest_connected=True` unless:
+
+1. The participant's role is `interpreter` (coordinators and listeners are rejected).
+2. The participant is the booth's current `active_interpreter_id`.
+
+`BoothRegistry.check_publish_permission()` encapsulates the same two checks for reuse by Layer 2.
 
 Enforcement rules:
 
 1. Start WHIP ingest only when local participant is active for the channel.
 2. Only the active interpreter can click "Go Live" to publish audio.
 3. Active interpreter handoff via `booth:set-active` clears the previous publisher's mic and ingest state.
-4. MediaMTX enforces single-publisher per path (`overridePublisher: yes`).
-5. Coordinator role can override active ownership.
+5. Coordinator role can override active ownership (but cannot publish).
 6. Non-interpreter roles cannot become active publishers.
+
+### Layer 2 — WHIP URL gating (fastapi_app.py)
+
+`GET /api/booth/{booth_id}/whip-url?participant_id=...` returns the MediaMTX WHIP ingest URL **only** to the active interpreter. Non-active interpreters and non-interpreter roles receive HTTP 403 and never learn the URL. The browser must call this endpoint before starting a WHIP session.
+
+### Layer 3 — Media server enforcement (mediamtx.yml)
+
+MediaMTX runs with `overridePublisher: yes` on all paths. If a rogue or stale WHIP session bypasses Layers 1 and 2, MediaMTX itself ensures only one publisher is live per path at any time — the old publisher is disconnected immediately when a new one arrives.
+
+```
+Layer 1: booth_state  →  role + active-interpreter check  (PermissionError)
+Layer 2: /whip-url    →  gated WHIP URL endpoint          (HTTP 403)
+Layer 3: MediaMTX     →  overridePublisher: yes            (old publisher kicked)
+```
 
 ## 10. Reconnect and teardown behavior
 
