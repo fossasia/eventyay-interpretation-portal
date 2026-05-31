@@ -117,6 +117,50 @@ async def _check_mediamtx() -> bool:
         return False
 
 
+# Track which channel paths have already been created this process lifetime
+# to avoid redundant API calls on every page load.
+_created_paths: set[str] = set()
+
+
+async def _ensure_mediamtx_path(channel_id: str) -> None:
+    """Create a named MediaMTX path with alwaysAvailable if it doesn't exist.
+
+    alwaysAvailable keeps the stream alive during publisher handoffs so WHEP
+    readers don't get disconnected.  This cannot be set on the wildcard
+    all_others path, so we create named paths via the Control API.
+
+    Uses ADD first; if the path already exists, PATCHes it to ensure
+    alwaysAvailable is set (handles MediaMTX restarts where the runtime
+    config was lost while the portal's in-memory cache was stale).
+    """
+    if channel_id in _created_paths:
+        return
+    api_base = settings.mediamtx_api_base
+    if not api_base:
+        return
+    body = {
+        'alwaysAvailable': True,
+        'alwaysAvailableTracks': [{'codec': 'Opus'}],
+        'overridePublisher': True,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            r = await client.post(
+                f'{api_base}/v3/config/paths/add/{channel_id}', json=body,
+            )
+            if r.status_code == 200:
+                _created_paths.add(channel_id)
+            elif r.status_code == 400 and 'already exists' in r.text.lower():
+                # Path exists but may lack alwaysAvailable — patch it
+                r2 = await client.patch(
+                    f'{api_base}/v3/config/paths/patch/{channel_id}', json=body,
+                )
+                if r2.status_code == 200:
+                    _created_paths.add(channel_id)
+    except (httpx.ConnectError, httpx.TimeoutException, httpx.RequestError):
+        pass  # Non-fatal; path will use all_others defaults
+
+
 def _require_access(
     credentials: HTTPAuthorizationCredentials | None,
     token_query: str = '',
@@ -181,6 +225,7 @@ async def interpreter_booth(
     channel: str | None = Query(None),
 ) -> Any:
     channel_id = channel or f'{booth_id}-audio'
+    await _ensure_mediamtx_path(channel_id)
     return templates.TemplateResponse(
         request,
         'interpreter_booth.html',
@@ -220,6 +265,30 @@ async def listen_booth(
             'language': language,
             'channel_id': channel_id,
             'hls_url': hls_url,
+        },
+    )
+
+
+@app.get('/listener-webrtc/{booth_id}')
+async def listen_webrtc_booth(
+    request: Request,
+    booth_id: str,
+    language: str = 'English',
+    channel: str | None = Query(None),
+) -> Any:
+    """Listener page using WHEP/WebRTC for low-latency playback."""
+    channel_id = channel or f'{booth_id}-audio'
+    await _ensure_mediamtx_path(channel_id)
+    whep_url = f'{settings.mediamtx_whip_base}/{channel_id}/whep'
+    return templates.TemplateResponse(
+        request,
+        'listener-webrtc.html',
+        {
+            'booth_id': booth_id,
+            'language': language,
+            'channel_id': channel_id,
+            'whep_url': whep_url,
+            'js_version': _JS_CACHE_BUST,
         },
     )
 

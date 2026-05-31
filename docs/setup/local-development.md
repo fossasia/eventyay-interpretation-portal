@@ -103,7 +103,15 @@ To test multi-user booth behaviour, open multiple tabs:
 - Tab 2: `?role=interpreter` (joins as backup)
 - Tab 3: `?role=coordinator`
 
-### Listener page
+### Listener page (primary — WHEP)
+
+```
+http://127.0.0.1:8000/listener-webrtc/hall-a-fr
+```
+
+This page connects to MediaMTX via WHEP (WebRTC) for sub-second latency playback.
+
+### Listener page (fallback — HLS)
 
 ```
 http://127.0.0.1:8000/listen/hall-a-fr

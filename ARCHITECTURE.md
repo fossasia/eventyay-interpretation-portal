@@ -7,7 +7,7 @@ The interpreter portal is a collaborative interpretation booth console integrate
 It covers:
 
 - interpreter monitoring (self-hosted Jitsi Meet)
-- interpreter audio ingest (WebRTC/WHIP → MediaMTX → HLS)
+- interpreter audio ingest (WebRTC/WHIP → MediaMTX → WHEP/HLS)
 - booth operations (participants, roles, handoff, internal chat, health state)
 
 It does **not** replace Eventyay viewer playback surfaces; it feeds them.
@@ -19,13 +19,14 @@ flowchart LR
   Speaker[Speaker/Presenter] -->|AV + floor audio| Jitsi[Self-hosted Jitsi Meet]
   Interpreter[Interpreter Portal] -->|Jitsi iframe monitor| Jitsi
   Interpreter -->|Mic → WHIP POST| MediaMTX[MediaMTX :8889]
+  MediaMTX -->|WHEP WebRTC| WHEPListener[/listener-webrtc page - primary]
   MediaMTX -->|HLS segments| HLS[MediaMTX :8888]
-  HLS -->|index.m3u8| Listener[/listen page - hls.js]
+  HLS -->|index.m3u8| HLSListener[/listen page - hls.js fallback]
   HLS -->|index.m3u8| Viewer[Eventyay stage page]
   Viewer -->|sync loop| YouTube[YouTube player - master clock]
 ```
 
-**Key principle:** Python is never in the audio path. The browser publishes directly to MediaMTX via WHIP. MediaMTX handles WebRTC termination, transcoding, and HLS segmentation.
+**Key principle:** Python is never in the audio path. The browser publishes directly to MediaMTX via WHIP. MediaMTX handles WebRTC termination and serves listeners via WHEP (sub-second latency) or HLS (fallback, ~2–3 s latency).
 
 ## 3. Interpreter audio pipeline
 
@@ -37,18 +38,19 @@ flowchart TD
   Track --> PC[RTCPeerConnection]
   PC --> WHIP[WHIP POST to MediaMTX :8889]
   WHIP --> MTX[MediaMTX terminates WebRTC]
-  MTX --> HLS[HLS segments at :8888/channel-id/index.m3u8]
+  MTX --> WHEP[WHEP at :8889/channel-id/whep - primary, sub-second]
+  MTX --> HLS[HLS segments at :8888/channel-id/index.m3u8 - fallback]
 ```
 
 No server-side audio processing. MediaMTX does everything.
 
 ### Seamless interpreter handoff
 
-MediaMTX runs with `overridePublisher: yes`. When a coordinator switches the active interpreter:
+MediaMTX runs with `overridePublisher: yes`. Paths are created with `alwaysAvailable: true` via the MediaMTX Control API (:9997) so readers stay connected even when no publisher is active. When a coordinator switches the active interpreter:
 
 1. The incoming interpreter's WHIP POST succeeds immediately (MediaMTX kicks the outgoing publisher)
-2. MediaMTX briefly destroys and recreates the HLS muxer (~200ms gap)
-3. The `/listen/{booth_id}` page uses hls.js with auto-recovery: on fatal errors, it destroys the player, waits briefly, and recreates — the listener hears a ~2s gap, no page reload needed
+2. WHEP listeners receive the new publisher's audio within ~1.5–3 s (the `RTCPeerConnection` stays open; MediaMTX routes the new track automatically)
+3. HLS fallback listeners experience a longer gap (~10–15 s) as hls.js recovers from the muxer reset
 
 ## 4. Viewer synchronization flow
 
@@ -104,13 +106,17 @@ flowchart LR
 - `templates/interpreter_booth.html`
   - server-rendered interpreter booth page
 - `templates/listener.html`
-  - attendee HLS listener page with hls.js auto-recovery
+  - attendee HLS listener page with hls.js auto-recovery (fallback)
+- `templates/listener-webrtc.html`
+  - attendee WHEP WebRTC listener page (primary, sub-second latency)
 - `static/js/interpreter-booth.js`
   - browser mic capture, WHIP WebRTC publishing, Jitsi iframe embed, WebSocket coordination, DOM updates
+- `static/js/whep-listener.js`
+  - WHEP WebRTC listener client — connects to MediaMTX WHEP endpoint for low-latency playback
 - `static/css/interpreter.css`
   - lightweight Eventyay-aligned styles
 - `mediamtx.yml`
-  - MediaMTX configuration (WHIP ingest, HLS output, overridePublisher for handoff)
+  - MediaMTX configuration (WHIP ingest, WHEP playback, HLS fallback, Control API, overridePublisher for handoff)
 - `docker-compose.yml`
   - all services: portal, mediamtx, jitsi-web, jitsi-prosody, jitsi-jicofo, jitsi-jvb
 
@@ -145,7 +151,8 @@ Reconnect:
 
 - browser peer connection state is surfaced as connected/reconnecting/disconnected
 - stale live publishers are stopped when active ownership changes
-- hls.js listener auto-recovers from HLS muxer reset during handoff
+- hls.js listener auto-recovers from HLS muxer reset during handoff (fallback path)
+- WHEP listeners stay connected during handoff via `alwaysAvailable` paths; new audio arrives within ~1.5–3 s
 
 Teardown:
 
@@ -169,15 +176,16 @@ Jitsi non-goals:
 Ingest responsibilities:
 
 - receive interpreter mic audio uplink via WHIP → MediaMTX
-- MediaMTX produces HLS for viewer consumption
+- MediaMTX produces WHEP for low-latency WebRTC playback and HLS as fallback for viewer consumption
 
 ## 11. Deployment assumptions
 
 - interpreter portal is served as an ASGI application (FastAPI + uvicorn)
 - WHIP endpoint (MediaMTX) is reachable from interpreter browsers
+- WHEP endpoint (MediaMTX) is reachable from listener browsers
 - WebSocket is available for cross-client booth state
 - self-hosted Jitsi Meet provides floor monitoring (4 Docker containers)
-- viewer stage page consumes HLS language channels from MediaMTX
+- viewer stage page consumes language channels from MediaMTX (WHEP or HLS)
 - PostgreSQL and Redis can be added later for persistence and multi-worker scale
 - in Docker, `DOCKER_HOST_ADDRESS` must be set to the host's LAN IP for JVB ICE to work
 

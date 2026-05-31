@@ -15,7 +15,7 @@ Build a production-oriented interpretation subsystem that is:
 - **Collaborative** for booth teams (active interpreter, backup, coordinator, listener)
 - **Extensible** for future multilingual, relay, and sign-language workflows
 
-**Current stack:** FastAPI (ASGI/uvicorn) + MediaMTX (WHIP/HLS) + self-hosted Jitsi Meet.
+**Current stack:** FastAPI (ASGI/uvicorn) + MediaMTX (WHIP/WHEP/HLS) + self-hosted Jitsi Meet.
 No Flask, no Socket.IO, no aiortc.
 
 ---
@@ -26,8 +26,9 @@ No Flask, no Socket.IO, no aiortc.
 2. **Separation of concerns:**
    - Jitsi = monitoring the floor session (self-hosted, receive-only)
    - WebRTC/WHIP = interpreter audio uplink directly to MediaMTX
-   - HLS = attendee audio delivery via MediaMTX
-   - FastAPI = coordination only (booth state, roles, chat, auth)
+   - WHEP = primary attendee audio delivery via MediaMTX (sub-second latency)
+   - HLS = fallback attendee audio delivery via MediaMTX
+   - FastAPI = coordination only (booth state, roles, chat, auth, dynamic MediaMTX path management)
 3. **One active publisher per language channel at all times.**
 4. **No local audio loopback.** Interpreter mic audio never routes to `AudioContext.destination`.
 5. **UI consistency:** match Eventyay visual language (CSS variables, card-based layout).
@@ -62,10 +63,11 @@ Enforcement rules:
 | `portal/booth_state.py` | In-memory booth registry, participant roles, handoff policy, chat |
 | `portal/auth.py` | JWT token creation and validation |
 | `portal/config.py` | pydantic-settings (env vars / .env) |
-| `templates/` | Server-rendered HTML (base shell, booth page, listener page) |
+| `templates/` | Server-rendered HTML (base shell, booth page, WHEP listener page, HLS listener page) |
 | `static/js/interpreter-booth.js` | Plain browser JS — WebRTC/WHIP, WebSocket, mic controls, Jitsi embed |
+| `static/js/whep-listener.js` | WHEP WebRTC listener client |
 | `static/css/interpreter.css` | Booth UI styles |
-| `mediamtx.yml` | MediaMTX config (WHIP ingest, HLS output, overridePublisher) |
+| `mediamtx.yml` | MediaMTX config (WHIP ingest, WHEP playback, HLS fallback, Control API, overridePublisher) |
 | `docker-compose.yml` | Portal + MediaMTX + Jitsi services |
 
 ---
@@ -91,7 +93,8 @@ Open booth URL → monitor participant grid → assign active interpreter
 ### Attendee flow
 
 ```
-Open /listen/{booth_id} → hls.js loads HLS stream → auto-recovers on handoff
+Open /listener-webrtc/{booth_id} → WHEP WebRTC connects → sub-second audio (primary)
+Open /listen/{booth_id} → hls.js loads HLS stream → auto-recovers on handoff (fallback)
 ```
 
 ---
@@ -103,8 +106,9 @@ Open /listen/{booth_id} → hls.js loads HLS stream → auto-recovers on handoff
 | Self-hosted Jitsi Meet | Monitor floor audio/video; booth communication context |
 | Browser `getUserMedia` | Capture interpreter mic (echoCancellation, noiseSuppression, autoGainControl) |
 | `RTCPeerConnection` + WHIP | Send audio track as Opus/RTP directly to MediaMTX |
-| MediaMTX | Terminate WebRTC, remux Opus → AAC, generate HLS segments |
-| hls.js (listener page) | Play HLS stream with auto-recovery during interpreter handoff |
+| MediaMTX | Terminate WebRTC, serve WHEP for low-latency playback, remux Opus → AAC for HLS |
+| WHEP (listener-webrtc page) | Play WebRTC stream with sub-second latency and automatic handoff recovery |
+| hls.js (listen page) | Play HLS fallback stream with auto-recovery during interpreter handoff |
 
 ---
 
@@ -145,7 +149,8 @@ Manual browser check:
 3. Confirm only one tab shows the active publisher state.
 4. Confirm mic test and level meter work on the active tab.
 5. Confirm coordinator can reassign active role.
-6. Open `/listen/demo-booth` and verify HLS playback + handoff recovery.
+6. Open `/listener-webrtc/demo-booth` and verify WHEP playback + handoff recovery.
+7. Open `/listen/demo-booth` and verify HLS fallback playback.
 
 ---
 

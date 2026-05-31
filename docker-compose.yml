@@ -22,6 +22,8 @@ services:
       MEDIAMTX_HLS_BASE: "${MEDIAMTX_HLS_BASE:-http://localhost:8888}"
       # Internal URL for Python health checks (Docker service name)
       MEDIAMTX_INTERNAL_BASE: "http://mediamtx:8888"
+      # MediaMTX Control API (Docker internal) — creates alwaysAvailable paths
+      MEDIAMTX_API_BASE: "http://mediamtx:9997"
     volumes:
       # Mount source for hot-reload — code changes take effect instantly
       - .:/app
@@ -46,8 +48,9 @@ services:
       - ./mediamtx.yml:/mediamtx.yml:ro
     ports:
       - "8888:8888"    # HLS output
-      - "8889:8889"    # WHIP (WebRTC HTTP ingest)
+      - "8889:8889"    # WHIP/WHEP (WebRTC HTTP ingest + playback)
       - "8189:8189/udp" # WebRTC ICE/UDP mux
+      - "9997:9997"    # Control API (used by FastAPI for alwaysAvailable paths)
     restart: unless-stopped
 
   # ── Self-hosted Jitsi Meet ────────────────────────────────────

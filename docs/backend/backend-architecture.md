@@ -13,8 +13,8 @@ The backend is a FastAPI application using native WebSocket for realtime communi
 | WebSocket (FastAPI native) | — | Realtime booth coordination |
 | PyJWT | — | JWT token authentication |
 | pydantic-settings | — | Environment variable loading and validation |
-| MediaMTX | bluenviron/mediamtx:1 | WHIP ingest and HLS delivery (external service) |
-| Python | 3.12.x | Runtime |
+| MediaMTX | bluenviron/mediamtx:1 | WHIP ingest, WHEP playback, and HLS fallback (external service) |
+| Python | 3.13.x | Runtime |
 | uv | — | Dependency management and venv |
 
 ---
@@ -31,10 +31,12 @@ portal/
 templates/
 ├── base.html                # Page shell (Eventyay-style header)
 ├── interpreter_booth.html   # Booth page (server-rendered with Jinja2)
-└── listen.html              # HLS listener page with hls.js
+├── listener-webrtc.html     # WHEP WebRTC listener page (primary)
+└── listen.html              # HLS listener page with hls.js (fallback)
 static/
 └── js/
-    └── interpreter-booth.js # Plain ES module: state machine, WebSocket, WHIP, UI
+    ├── interpreter-booth.js # Plain ES module: state machine, WebSocket, WHIP, UI
+    └── whep-listener.js     # WHEP WebRTC listener client
 ```
 
 ---
@@ -48,7 +50,8 @@ static/
 | `GET` | `/` | Redirect to `/interpreter/demo-booth` |
 | `GET` | `/healthz` | Health check |
 | `GET` | `/interpreter/{booth_id}` | Render interpreter booth page (Jinja2) |
-| `GET` | `/listen/{booth_id}` | Render HLS listener page (Jinja2) |
+| `GET` | `/listener-webrtc/{booth_id}` | Render WHEP WebRTC listener page (primary) |
+| `GET` | `/listen/{booth_id}` | Render HLS listener page (fallback) |
 | `GET` | `/api/booth/{booth_id}/state` | Fetch current booth state snapshot |
 
 ### WebSocket endpoint
@@ -177,7 +180,11 @@ JavaScript in `static/js/interpreter-booth.js` reads these values and drives the
 
 ### `templates/listen.html`
 
-Renders the HLS listener page for a specific booth. Uses hls.js with auto-recovery to play the interpretation audio stream from MediaMTX.
+Renders the HLS fallback listener page for a specific booth. Uses hls.js with auto-recovery to play the interpretation audio stream from MediaMTX.
+
+### `templates/listener-webrtc.html`
+
+Renders the primary WHEP listener page. Uses `RTCPeerConnection` to connect to MediaMTX's WHEP endpoint for sub-second latency WebRTC playback. Includes automatic reconnection and debug panels.
 
 ---
 

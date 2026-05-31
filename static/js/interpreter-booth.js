@@ -834,7 +834,9 @@ async function startLiveIngest() {
       state.peerConnection.close()
       state.peerConnection = null
     }
-    const peerConnection = new RTCPeerConnection()
+    // Empty iceServers: skip STUN for local dev (browser defaults add
+    // Google STUN which adds 500ms+ to ICE gathering).
+    const peerConnection = new RTCPeerConnection({ iceServers: [] })
     state.peerConnection = peerConnection
     state.micStream.getAudioTracks().forEach((track) => {
       peerConnection.addTrack(track, state.micStream)
@@ -911,8 +913,8 @@ async function stopLiveIngest() {
 
 // Retry intervals for WHIP on relay handoff (ms from previous attempt).
 // Outgoing interpreter stops at ~700ms, so the 800ms mark (2 × 400ms) wins.
-const _RELAY_RETRY_INTERVAL_MS = 400
-const _RELAY_MAX_ATTEMPTS = 6
+const _RELAY_RETRY_INTERVAL_MS = 200
+const _RELAY_MAX_ATTEMPTS = 8
 
 function attemptRelayStart(attempt) {
   if (attempt >= _RELAY_MAX_ATTEMPTS) return
@@ -931,7 +933,7 @@ function attemptRelayStart(attempt) {
         state.peerConnection.close()
         state.peerConnection = null
       }
-      const pc = new RTCPeerConnection()
+      const pc = new RTCPeerConnection({ iceServers: [] })
       state.peerConnection = pc
       state.micStream.getAudioTracks().forEach((t) => pc.addTrack(t, state.micStream))
       pc.addEventListener('connectionstatechange', () => {
@@ -1159,7 +1161,7 @@ function waitForIceGathering(peerConnection) {
     const timeout = window.setTimeout(() => {
       peerConnection.removeEventListener('icegatheringstatechange', onStateChange)
       resolve()
-    }, 3000)
+    }, 100)
     function onStateChange() {
       if (peerConnection.iceGatheringState !== 'complete') return
       window.clearTimeout(timeout)
@@ -1176,13 +1178,4 @@ function formatTime(timestamp) {
   return Number.isNaN(date.getTime())
     ? ''
     : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-}
-
-function escapeHtml(value) {
-  return String(value)
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;')
 }

@@ -160,7 +160,7 @@ All tests must pass. There is no separate lint step currently; follow the code s
 ## What is not tested
 
 - Browser-side JavaScript (no browser-based test framework is configured yet).
-- MediaMTX WHIP/HLS pipeline (integration test requiring a running MediaMTX instance).
+- MediaMTX WHIP/WHEP/HLS pipeline (integration test requiring a running MediaMTX instance).
 - Multi-worker WebSocket behaviour (requires Redis; not tested in CI).
 
 These are identified gaps for future test coverage.
