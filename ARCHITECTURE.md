@@ -91,10 +91,46 @@ flowchart LR
   Listener --> Jitsi
 ```
 
-## 6. Runtime components in this repository
+## 6. Booth identity scheme
+
+A booth is identified by three coordinates:
+
+| Coordinate      | Format                          | Example         |
+|-----------------|---------------------------------|-----------------|
+| `event_slug`    | Lowercase alphanumeric + hyphens, no consecutive hyphens, max 64 chars | `pycon2026` |
+| `language_code` | ISO 639-1 two-letter code       | `en`            |
+| `instance`      | `primary` or `backup`           | `primary`       |
+
+**Booth ID:** `{event_slug}-{language_code}` → `pycon2026-en`
+
+**MediaMTX path:** `{event_slug}/{language_code}` → `pycon2026/en` (one active stream per language per event)
+
+### Validation rules
+
+- **Event slug:** `^[a-z0-9]+(?:-[a-z0-9]+)*$`, 1–64 characters. Must start and end with alphanumeric. No consecutive hyphens, no underscores, no spaces.
+- **Language code:** Exactly two lowercase ASCII letters matching a recognised ISO 639-1 code.
+- **Instance:** Either `primary` or `backup`. Only one instance publishes at a time.
+
+### Bidirectional conversion
+
+```
+booth_id_to_mediamtx_path("pycon2026-en")  →  "pycon2026/en"
+mediamtx_path_to_booth_id("pycon2026/en")  →  "pycon2026-en"
+parse_booth_id("my-great-event-fr")        →  ("my-great-event", "fr")
+```
+
+The language code is always the last two characters after the final hyphen.
+
+### Legacy compatibility
+
+Existing free-form booth IDs (e.g. `hall-a-fr`) that happen to end with a valid ISO 639-1 code are parsed automatically. IDs that cannot be parsed are accepted with empty identity fields during the migration window.
+
+## 7. Runtime components in this repository
 
 - `fastapi_app.py`
   - FastAPI routes, WebSocket event handlers, JWT auth, Jinja2 templates, health checks
+- `portal/booth_identity.py`
+  - booth identity scheme: validation (event slug, ISO 639-1 language code, instance), booth ID generation, MediaMTX path mapping, bidirectional conversion
 - `portal/booth_state.py`
   - async in-memory booth registry, participant role policy, active interpreter ownership, handoff state, chat history
 - `portal/auth.py`
@@ -120,11 +156,12 @@ flowchart LR
 - `docker-compose.yml`
   - all services: portal, mediamtx, jitsi-web, jitsi-prosody, jitsi-jicofo, jitsi-jvb
 
-## 7. State model and ownership
+## 8. State model and ownership
 
 `BoothRegistry` tracks:
 
-- booth metadata (`booth_id`, `language`, `channel_id`)
+- booth identity (`booth_id`, `event_slug`, `language_code`, `instance`, `mediamtx_path`)
+- booth metadata (`language`, `channel_id`)
 - active interpreter id
 - participant roster and roles
 - per-participant connection, mic, and ingest state
@@ -134,7 +171,7 @@ flowchart LR
 
 The browser keeps only local UI/session state: joined participant id, mic stream, peer connection, current booth snapshot, and current chat messages. Server state remains the source of truth for who is active.
 
-## 8. Active interpreter enforcement
+## 9. Active interpreter enforcement
 
 Enforcement rules:
 
@@ -145,7 +182,7 @@ Enforcement rules:
 5. Coordinator role can override active ownership.
 6. Non-interpreter roles cannot become active publishers.
 
-## 9. Reconnect and teardown behavior
+## 10. Reconnect and teardown behavior
 
 Reconnect:
 
@@ -160,7 +197,7 @@ Teardown:
 - update booth state over WebSocket
 - remove participant from in-memory booth on WebSocket disconnect
 
-## 10. Jitsi role vs ingest role
+## 11. Jitsi role vs ingest role
 
 Jitsi responsibilities:
 
@@ -178,7 +215,7 @@ Ingest responsibilities:
 - receive interpreter mic audio uplink via WHIP → MediaMTX
 - MediaMTX produces WHEP for low-latency WebRTC playback and HLS as fallback for viewer consumption
 
-## 11. Deployment assumptions
+## 12. Deployment assumptions
 
 - interpreter portal is served as an ASGI application (FastAPI + uvicorn)
 - WHIP endpoint (MediaMTX) is reachable from interpreter browsers
@@ -189,7 +226,7 @@ Ingest responsibilities:
 - PostgreSQL and Redis can be added later for persistence and multi-worker scale
 - in Docker, `DOCKER_HOST_ADDRESS` must be set to the host's LAN IP for JVB ICE to work
 
-## 12. Reliability and operational constraints
+## 13. Reliability and operational constraints
 
 - recommend headphones-first operation to reduce feedback risk
 - prevent local audio loopback in mic capture path

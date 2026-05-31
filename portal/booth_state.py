@@ -6,6 +6,16 @@ from datetime import datetime, timezone
 from typing import Literal
 from uuid import uuid4
 
+from portal.booth_identity import (
+    BoothInstance,
+    make_booth_id,
+    make_mediamtx_path,
+    parse_booth_id,
+    validate_event_slug,
+    validate_instance,
+    validate_language_code,
+)
+
 ParticipantRole = Literal['interpreter', 'coordinator', 'listener']
 
 
@@ -39,17 +49,29 @@ class ChatMessage:
 @dataclass
 class Booth:
     booth_id: str
+    event_slug: str
+    language_code: str
     language: str
     channel_id: str
+    instance: BoothInstance = 'primary'
+    mediamtx_path: str = ''
     active_interpreter_id: str | None = None
     handoff_state: str = 'idle'
     participants: dict[str, Participant] = field(default_factory=dict)
     chat_messages: list[ChatMessage] = field(default_factory=list)
     ingest_status: str = 'disconnected'
 
+    def __post_init__(self) -> None:
+        if not self.mediamtx_path and self.event_slug and self.language_code:
+            self.mediamtx_path = make_mediamtx_path(self.event_slug, self.language_code)
+
     def as_public_dict(self) -> dict:
         return {
             'booth_id': self.booth_id,
+            'event_slug': self.event_slug,
+            'language_code': self.language_code,
+            'instance': self.instance,
+            'mediamtx_path': self.mediamtx_path,
             'language': self.language,
             'channel_id': self.channel_id,
             'active_interpreter_id': self.active_interpreter_id,
@@ -78,12 +100,63 @@ class BoothRegistry:
         ``language`` and ``channel_id`` are only used when *creating* the booth;
         they are treated as immutable once set so that a later request from a
         different client cannot silently change the booth's canonical values.
+
+        The ``booth_id`` is parsed into ``event_slug`` and ``language_code``
+        using :func:`parse_booth_id`.  If parsing fails (legacy free-form ID),
+        the booth is still created with empty identity fields so existing
+        callers continue to work during the migration window.
         """
         booth = self._booths.get(booth_id)
         if booth is None:
-            booth = Booth(booth_id=booth_id, language=language, channel_id=channel_id)
+            try:
+                event_slug, language_code = parse_booth_id(booth_id)
+            except ValueError:
+                event_slug = ''
+                language_code = ''
+            booth = Booth(
+                booth_id=booth_id,
+                event_slug=event_slug,
+                language_code=language_code,
+                language=language,
+                channel_id=channel_id,
+            )
             self._booths[booth_id] = booth
         return booth
+
+    async def create_booth(
+        self,
+        event_slug: str,
+        language_code: str,
+        language: str,
+        channel_id: str = '',
+        instance: BoothInstance = 'primary',
+    ) -> dict:
+        """Create a booth using validated identity coordinates.
+
+        This is the preferred entry point for new code.  The booth ID and
+        MediaMTX path are derived automatically from the coordinates.
+
+        Raises ``ValueError`` if the slug or language code is invalid, or if
+        a booth with the same ID already exists.
+        """
+        slug = validate_event_slug(event_slug)
+        code = validate_language_code(language_code)
+        inst = validate_instance(instance)
+        booth_id = make_booth_id(slug, code)
+
+        async with self._lock:
+            if booth_id in self._booths:
+                raise ValueError(f"Booth '{booth_id}' already exists.")
+            booth = Booth(
+                booth_id=booth_id,
+                event_slug=slug,
+                language_code=code,
+                language=language,
+                channel_id=channel_id or f'{booth_id}-audio',
+                instance=inst,
+            )
+            self._booths[booth_id] = booth
+            return booth.as_public_dict()
 
     async def snapshot(self, booth_id: str, language: str, channel_id: str) -> dict:
         async with self._lock:
