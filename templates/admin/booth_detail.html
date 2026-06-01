@@ -142,7 +142,43 @@
   <div class="section-header">
     <h2>Assigned Members</h2>
   </div>
-  {% if users %}
+  
+  {% if request.query_params.get('error') == 'user_not_found' %}
+  <div class="alert alert-danger" style="margin-bottom: 1rem; color: #d32f2f; background-color: #fde0e0; padding: 10px; border-radius: 4px;">
+    <strong>Error:</strong> User with that email address was not found. They must register first.
+  </div>
+  {% endif %}
+
+  <!-- Assign Member Form -->
+  <div class="token-form-card" style="margin-bottom: 1.5rem;">
+    <h3>Assign Member</h3>
+    <form method="post" action="/admin/events/{{ event.id }}/rooms/{{ room.id }}/booths/{{ booth.id }}/members/" class="token-form">
+      <div class="form-row">
+        <div class="form-group" style="flex: 2;">
+          <label for="member_email">User Email</label>
+          <input type="email" name="email" id="member_email" placeholder="user@example.com" required />
+        </div>
+        <div class="form-group">
+          <label for="member_role">Role</label>
+          <select name="role" id="member_role" required>
+            <option value="listener">listener</option>
+            <option value="interpreter" selected>interpreter</option>
+            <option value="coordinator">coordinator</option>
+          </select>
+        </div>
+        <div class="form-group form-group-btn">
+          <button type="submit" class="btn btn-primary">Assign Member</button>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  {% set current_members = [] %}
+  {% for m in memberships %}
+    {% set current_members = current_members.append(m) %}
+  {% endfor %}
+
+  {% if memberships %}
   <table class="data-table">
     <thead>
       <tr>
@@ -154,9 +190,9 @@
       </tr>
     </thead>
     <tbody>
-      {% for u in users %}
-      {% set m = membership_map.get(u.id) %}
-      <tr class="{{ 'row-assigned' if m else '' }}">
+      {% for m in memberships %}
+      {% set u = m.user %}
+      <tr class="row-assigned">
         <td>{{ u.email }}</td>
         <td>{{ u.display_name }}</td>
         <td>
@@ -167,27 +203,15 @@
           {% endif %}
         </td>
         <td>
-          <form method="post" action="/admin/events/{{ event.id }}/rooms/{{ room.id }}/booths/{{ booth.id }}/members/" class="inline-form">
-            <input type="hidden" name="user_id" value="{{ u.id }}" />
-            <select name="role" class="role-select" onchange="this.form.submit()">
-              <option value="">— none —</option>
-              <option value="listener" {{ 'selected' if m and m.role == 'listener' }}>listener</option>
-              <option value="interpreter" {{ 'selected' if m and m.role == 'interpreter' }}>interpreter</option>
-              <option value="coordinator" {{ 'selected' if m and m.role == 'coordinator' }}>coordinator</option>
-            </select>
-          </form>
+          <span class="badge badge-role badge-{{ m.role }}">{{ m.role }}</span>
         </td>
         <td class="actions-cell">
-          {% if m %}
           <form method="post"
                 action="/admin/events/{{ event.id }}/rooms/{{ room.id }}/booths/{{ booth.id }}/members/{{ m.id }}/delete"
                 class="inline-form"
                 onsubmit="return confirm('Remove {{ u.display_name }} from this booth?')">
             <button type="submit" class="btn btn-sm btn-danger">Remove</button>
           </form>
-          {% else %}
-          <span class="muted">—</span>
-          {% endif %}
         </td>
       </tr>
       {% endfor %}
@@ -195,7 +219,7 @@
   </table>
   {% else %}
   <div class="empty-state">
-    <p>No registered users found.</p>
+    <p>No users are assigned to this booth yet.</p>
   </div>
   {% endif %}
 </div>

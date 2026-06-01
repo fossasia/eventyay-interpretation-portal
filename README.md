@@ -144,7 +144,11 @@ curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/
 #### Step 5: Run database migrations
 
 ```bash
+# Natively
 uv run alembic upgrade head
+
+# In Docker
+docker compose exec portal uv run alembic upgrade head
 ```
 
 This creates the SQLite database (`interpretation.db`) and applies all migrations

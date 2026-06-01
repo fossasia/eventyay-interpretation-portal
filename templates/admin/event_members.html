@@ -17,7 +17,37 @@
   <span class="badge">{{ memberships|length }} assigned</span>
 </div>
 
-{% if users %}
+{% if request.query_params.get('error') == 'user_not_found' %}
+<div class="alert alert-danger" style="margin-bottom: 1rem; color: #d32f2f; background-color: #fde0e0; padding: 10px; border-radius: 4px;">
+  <strong>Error:</strong> User with that email address was not found. They must register first.
+</div>
+{% endif %}
+
+<div class="section-card" style="margin-bottom: 2rem;">
+  <div class="section-header">
+    <h2>Assign Event Admin</h2>
+  </div>
+  <div class="card-body">
+    <form method="post" action="/admin/events/{{ event.id }}/members/" class="token-form">
+      <div class="form-row">
+        <div class="form-group" style="flex: 2;">
+          <label for="email">User Email</label>
+          <input type="email" name="email" id="email" placeholder="user@example.com" required />
+        </div>
+        <div class="form-group">
+          <label for="role">Role</label>
+          <input type="text" name="role" id="role" value="event_admin" readonly style="background-color: #f5f5f5;" />
+        </div>
+        <div class="form-group form-group-btn">
+          <button type="submit" class="btn btn-primary">Assign Role</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<h2>Assigned Event Admins</h2>
+{% if memberships %}
 <table class="data-table">
   <thead>
     <tr>
@@ -29,9 +59,9 @@
     </tr>
   </thead>
   <tbody>
-    {% for u in users %}
-    {% set m = membership_map.get(u.id) %}
-    <tr class="{{ 'row-assigned' if m else '' }}">
+    {% for m in memberships %}
+    {% set u = m.user %}
+    <tr class="row-assigned">
       <td>{{ u.email }}</td>
       <td>{{ u.display_name }}</td>
       <td>
@@ -41,29 +71,14 @@
         <span class="status-offline">○ Inactive</span>
         {% endif %}
       </td>
-      <td>
-        <form method="post" action="/admin/events/{{ event.id }}/members/" class="inline-form">
-          <input type="hidden" name="user_id" value="{{ u.id }}" />
-          <select name="role" class="role-select" onchange="this.form.submit()">
-            <option value="">— none —</option>
-            <option value="listener" {{ 'selected' if m and m.role == 'listener' }}>listener</option>
-            <option value="interpreter" {{ 'selected' if m and m.role == 'interpreter' }}>interpreter</option>
-            <option value="coordinator" {{ 'selected' if m and m.role == 'coordinator' }}>coordinator</option>
-            <option value="event_admin" {{ 'selected' if m and m.role == 'event_admin' }}>event_admin</option>
-          </select>
-        </form>
-      </td>
+      <td><span class="badge badge-role badge-event_admin">event_admin</span></td>
       <td class="actions-cell">
-        {% if m %}
         <form method="post"
               action="/admin/events/{{ event.id }}/members/{{ m.id }}/delete"
               class="inline-form"
               onsubmit="return confirm('Remove {{ u.display_name }} from this event?')">
           <button type="submit" class="btn btn-sm btn-danger">Remove</button>
         </form>
-        {% else %}
-        <span class="muted">—</span>
-        {% endif %}
       </td>
     </tr>
     {% endfor %}
@@ -71,11 +86,7 @@
 </table>
 {% else %}
 <div class="empty-state">
-  <p>No registered users yet. Users can sign up at <a href="/register">/register</a>.</p>
+  <p>No users have been assigned the event admin role yet.</p>
 </div>
 {% endif %}
-
-<div class="admin-help-section">
-  <p>Select a role from the dropdown to assign or change a user's role for this event. Click <strong>Remove</strong> to revoke access entirely.</p>
-</div>
 {% endblock %}

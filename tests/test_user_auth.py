@@ -272,7 +272,7 @@ class TestAdminUserManagement:
         async with _client() as c:
             resp = await c.post(
                 f'/admin/events/{event.id}/members/',
-                data={'user_id': str(user.id), 'role': 'interpreter'},
+                data={'email': user.email, 'role': 'interpreter'},
                 cookies=admin_cookie,
                 follow_redirects=False,
             )

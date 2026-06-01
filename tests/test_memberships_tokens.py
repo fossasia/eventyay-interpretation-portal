@@ -81,8 +81,8 @@ class TestEventMembershipDB:
         user = await _create_test_user()
         event, _, _ = await _seed_event_room_booth()
         async with get_session() as s:
-            m = await set_event_membership(s, user_id=user.id, event_id=event.id, role='interpreter')
-        assert m.role == 'interpreter'
+            m = await set_event_membership(s, user_id=user.id, event_id=event.id, role='event_admin')
+        assert m.role == 'event_admin'
         assert m.user_id == user.id
         assert m.event_id == event.id
 
@@ -245,8 +245,8 @@ class TestAdminEventMembersRoutes:
             resp = await c.get(f'/admin/events/{event.id}/members/', cookies=admin_cookie)
         assert resp.status_code == 200
         assert b'Members' in resp.content
-        # All users are shown in the table
-        assert b'listed@test.com' in resp.content
+        # Table should show empty state because no members are assigned
+        assert b'No users have been assigned' in resp.content
 
     @pytest.mark.anyio
     async def test_members_page_404_for_missing_event(self, setup_db, admin_cookie):
@@ -269,7 +269,7 @@ class TestAdminEventMembersRoutes:
         async with _client() as c:
             resp = await c.post(
                 f'/admin/events/{event.id}/members/',
-                data={'user_id': str(user.id), 'role': 'interpreter'},
+                data={'email': user.email, 'role': 'event_admin'},
                 cookies=admin_cookie,
                 follow_redirects=False,
             )
@@ -277,7 +277,7 @@ class TestAdminEventMembersRoutes:
         async with get_session() as s:
             memberships = await list_memberships_for_event(s, event.id)
         assert len(memberships) == 1
-        assert memberships[0].role == 'interpreter'
+        assert memberships[0].role == 'event_admin'
         assert memberships[0].user_id == user.id
 
     @pytest.mark.anyio
@@ -286,12 +286,12 @@ class TestAdminEventMembersRoutes:
         event, _, _ = await _seed_event_room_booth()
         user = await _create_test_user()
         async with get_session() as s:
-            await set_event_membership(s, user_id=user.id, event_id=event.id, role='interpreter')
+            await set_event_membership(s, user_id=user.id, event_id=event.id, role='event_admin')
         async with _client() as c:
             resp = await c.get(f'/admin/events/{event.id}/members/', cookies=admin_cookie)
         assert resp.status_code == 200
-        # The interpreter option should be selected
-        assert b'selected' in resp.content
+        # The badge for event_admin should be rendered
+        assert b'badge-event_admin' in resp.content
         assert b'Remove' in resp.content
 
     @pytest.mark.anyio
@@ -324,7 +324,7 @@ class TestAdminEventMembersRoutes:
         async with _client() as c:
             resp = await c.post(
                 f'/admin/events/{event.id}/members/',
-                data={'user_id': str(user.id), 'role': ''},
+                data={'email': user.email, 'role': ''},
                 cookies=admin_cookie,
                 follow_redirects=False,
             )
@@ -604,14 +604,14 @@ class TestEndToEndAdminWorkflow:
         # 5. Assign per-event role
         async with _client() as c:
             resp = await c.post(f'/admin/events/{event.id}/members/', data={
-                'user_id': str(alice.id), 'role': 'interpreter',
+                'email': alice.email, 'role': 'event_admin',
             }, cookies=admin_cookie, follow_redirects=False)
         assert resp.status_code == 303
 
         async with get_session() as s:
             memberships = await list_memberships_for_event(s, event.id)
         assert len(memberships) == 1
-        assert memberships[0].role == 'interpreter'
+        assert memberships[0].role == 'event_admin'
 
         # 6. Generate invite token for the booth
         async with _client() as c:
@@ -656,7 +656,7 @@ class TestEndToEndAdminWorkflow:
         async with _client() as c:
             resp = await c.get('/account', cookies={'user_token': user_token})
         assert resp.status_code == 200
-        assert b'interpreter' in resp.content
+        assert b'event_admin' in resp.content
         assert b'E2E Event' in resp.content
 
         # 10. Remove membership

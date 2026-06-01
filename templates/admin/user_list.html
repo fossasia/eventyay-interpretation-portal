@@ -31,8 +31,8 @@
     {% for user in users %}
     <tr>
       <td>{{ user.id }}</td>
-      <td>{{ user.email }}</td>
-      <td>{{ user.display_name }}</td>
+      <td><a href="/admin/users/{{ user.id }}/">{{ user.email }}</a></td>
+      <td><a href="/admin/users/{{ user.id }}/">{{ user.display_name }}</a></td>
       <td>
         {% if user.is_admin %}
         <span class="badge badge-role badge-event_admin">Admin</span>

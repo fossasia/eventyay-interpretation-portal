@@ -121,9 +121,8 @@ Roles are assigned **per event**, not globally. A user can be an `interpreter` f
 
 1. Log in to admin panel → open an **Event** detail page
 2. Click **Manage Members**
-3. Find the user in the table
-4. Choose a role from the **Event Role** dropdown (auto-saves on change)
-5. Select "— none —" to remove the role
+3. Enter the user's registered email address in the **Assign Event Admin** form
+4. Click **Assign Role**
 
 ### Assigning booth roles (Interpreter assignments)
 
@@ -131,13 +130,15 @@ For stricter access control, you can assign an interpreter to a *specific booth*
 
 1. Go to an event's **Rooms** → **Booths** and open a specific booth
 2. Scroll to **Assigned Members**
-3. Select `interpreter` next to the user's name
-4. When the interpreter logs in, they will see an "Open Booth" button on their home dashboard directly to this booth
+3. Under **Assign Member**, enter the user's registered email address
+4. Select `interpreter` from the Role dropdown
+5. Click **Assign Member**
+6. When the interpreter logs in, they will see an "Open Booth" button on their home dashboard directly to this booth
 
 ### Removing a role
 
 1. Go to the event's or booth's **Members** section
-2. Click **Remove** next to the membership
+2. Click **Remove** next to the user's name
 
 ### User admin flags
 

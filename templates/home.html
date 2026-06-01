@@ -86,8 +86,11 @@
                       <span class="status-offline">○</span>
                       {% endif %}
                     </td>
-                    <td>
+                    <td style="display: flex; gap: 0.5rem; align-items: center;">
                       <a href="/listener-webrtc/{{ bs.booth_id }}" class="btn btn-sm">Listen ↗</a>
+                      {% if bs.can_interpret %}
+                      <a href="/interpreter/{{ ed.event.slug }}/{{ bs.db.language_code }}" class="btn btn-sm btn-outline" style="border-color: #007bff; color: #007bff; background: transparent;">Open Booth ↗</a>
+                      {% endif %}
                     </td>
                   </tr>
                   {% endfor %}
@@ -104,7 +107,11 @@
       {% else %}
       <section class="home-section">
         <div class="empty-state home-empty">
+          {% if current_user %}
+          <p>No events are currently configured. Admins can create events in the <a href="/admin/">Admin Panel</a>.</p>
+          {% else %}
           <p>No events are currently configured. Admins can <a href="/admin/login">sign in</a> to set up events and booths.</p>
+          {% endif %}
         </div>
       </section>
       {% endif %}

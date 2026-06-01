@@ -288,23 +288,16 @@ async def home(request: Request):
     try:
         async with get_session() as session:
             events = await list_events(session)
-            event_data = []
-            for ev in events:
-                db_booths = await list_booths_for_event(session, ev.id)
-                booth_statuses = []
-                for b in db_booths:
-                    bid = make_booth_id(ev.slug, b.language_code)
-                    mem_booth = booths.get_booth_sync(bid)
-                    is_live = mem_booth is not None and mem_booth.ingest_status == 'connected'
-                    booth_statuses.append({'db': b, 'booth_id': bid, 'is_live': is_live})
-                event_data.append({
-                    'event': ev,
-                    'booths': booth_statuses,
-                    'live_count': sum(1 for bs in booth_statuses if bs['is_live']),
-                })
             
+            user_event_roles = {}
+            user_booth_roles = {}
             if current_user:
-                bms = await list_booth_memberships_for_user(session, int(current_user['sub']))
+                uid = int(current_user['sub'])
+                ems = await list_memberships_for_user(session, uid)
+                user_event_roles = {em.event_id: em.role for em in ems}
+                
+                bms = await list_booth_memberships_for_user(session, uid)
+                user_booth_roles = {bm.booth_id: bm.role for bm in bms}
                 for bm in bms:
                     bid = make_booth_id(bm.booth.event.slug, bm.booth.language_code)
                     mem_booth = booths.get_booth_sync(bid)
@@ -318,6 +311,35 @@ async def home(request: Request):
                         'event_slug': bm.booth.event.slug,
                         'language_code': bm.booth.language_code,
                     })
+                    
+            event_data = []
+            for ev in events:
+                db_booths = await list_booths_for_event(session, ev.id)
+                booth_statuses = []
+                for b in db_booths:
+                    bid = make_booth_id(ev.slug, b.language_code)
+                    mem_booth = booths.get_booth_sync(bid)
+                    is_live = mem_booth is not None and mem_booth.ingest_status == 'connected'
+                    
+                    can_interpret = False
+                    if current_user:
+                        is_admin = current_user.get('is_admin', False)
+                        ev_role = user_event_roles.get(ev.id)
+                        booth_role = user_booth_roles.get(b.id)
+                        if is_admin or ev_role in ('interpreter', 'coordinator', 'event_admin') or booth_role in ('interpreter', 'coordinator'):
+                            can_interpret = True
+                            
+                    booth_statuses.append({
+                        'db': b, 
+                        'booth_id': bid, 
+                        'is_live': is_live,
+                        'can_interpret': can_interpret
+                    })
+                event_data.append({
+                    'event': ev,
+                    'booths': booth_statuses,
+                    'live_count': sum(1 for bs in booth_statuses if bs['is_live']),
+                })
     except Exception:
         event_data = []
 
@@ -444,7 +466,15 @@ async def interpreter_booth(
             detail='You do not have a role assigned. Ask an admin for an invite link.',
         )
 
-    channel_id = channel or f'{booth_id}-audio'
+    if channel:
+        channel_id = channel
+    else:
+        try:
+            from portal.booth_identity import booth_id_to_mediamtx_path
+            channel_id = booth_id_to_mediamtx_path(booth_id)
+        except ValueError:
+            channel_id = f'{booth_id}-audio'
+
     await _ensure_mediamtx_path(channel_id)
     return templates.TemplateResponse(
         request,
@@ -482,7 +512,15 @@ async def listen_booth(
             url=f'/login?next=/listen/{booth_id}',
             status_code=status.HTTP_303_SEE_OTHER,
         )
-    channel_id = channel or f'{booth_id}-audio'
+    if channel:
+        channel_id = channel
+    else:
+        try:
+            from portal.booth_identity import booth_id_to_mediamtx_path
+            channel_id = booth_id_to_mediamtx_path(booth_id)
+        except ValueError:
+            channel_id = f'{booth_id}-audio'
+
     hls_url = f'{settings.mediamtx_hls_base}/{channel_id}/index.m3u8'
     return templates.TemplateResponse(
         request,
@@ -510,7 +548,15 @@ async def listen_webrtc_booth(
             url=f'/login?next=/listener-webrtc/{booth_id}',
             status_code=status.HTTP_303_SEE_OTHER,
         )
-    channel_id = channel or f'{booth_id}-audio'
+    if channel:
+        channel_id = channel
+    else:
+        try:
+            from portal.booth_identity import booth_id_to_mediamtx_path
+            channel_id = booth_id_to_mediamtx_path(booth_id)
+        except ValueError:
+            channel_id = f'{booth_id}-audio'
+
     await _ensure_mediamtx_path(channel_id)
     whep_url = f'{settings.mediamtx_whip_base}/{channel_id}/whep'
     return templates.TemplateResponse(
@@ -1237,6 +1283,7 @@ async def admin_booth_detail(request: Request, event_id: int, room_id: int, boot
         'active_interpreter': active_interpreter,
         'tokens': tokens,
         'users': users,
+        'memberships': memberships,
         'membership_map': membership_map,
     })
 
@@ -1246,20 +1293,20 @@ async def admin_booth_detail(request: Request, event_id: int, room_id: int, boot
     dependencies=[Depends(require_admin)],
 )
 async def admin_add_booth_member(request: Request, event_id: int, room_id: int, booth_id: int):
-    from portal.database import get_session, list_memberships_for_booth, remove_booth_membership, set_booth_membership
+    from portal.database import get_session, list_memberships_for_booth, remove_booth_membership, set_booth_membership, get_user_by_email
 
     form = await request.form()
-    user_id = form.get('user_id', '')
+    email = form.get('email', '').strip()
     role = form.get('role', '').strip()
-    if user_id:
-        try:
-            uid = int(user_id)
-        except ValueError:
-            return RedirectResponse(
-                url=f'/admin/events/{event_id}/rooms/{room_id}/booths/{booth_id}/',
-                status_code=status.HTTP_303_SEE_OTHER,
-            )
+    if email:
         async with get_session() as session:
+            user = await get_user_by_email(session, email)
+            if not user:
+                return RedirectResponse(
+                    url=f'/admin/events/{event_id}/rooms/{room_id}/booths/{booth_id}/?error=user_not_found',
+                    status_code=status.HTTP_303_SEE_OTHER,
+                )
+            uid = user.id
             if role:
                 await set_booth_membership(session, user_id=uid, booth_id=booth_id, role=role)
             else:
@@ -1336,6 +1383,59 @@ async def admin_delete_user(request: Request, user_id: int):
         await delete_user(session, user_id)
     return RedirectResponse(url='/admin/users/', status_code=status.HTTP_303_SEE_OTHER)
 
+@app.get('/admin/users/{user_id}/', dependencies=[Depends(require_admin)])
+async def admin_user_detail(request: Request, user_id: int):
+    from portal.database import get_session, get_user_by_id, list_events, list_memberships_for_user
+
+    async with get_session() as session:
+        user = await get_user_by_id(session, user_id)
+        if not user:
+            return RedirectResponse(url='/admin/users/', status_code=status.HTTP_303_SEE_OTHER)
+        
+        events = await list_events(session)
+        memberships = await list_memberships_for_user(session, user_id)
+        
+        event_admin_map = {m.event_id: m for m in memberships if m.role == 'event_admin'}
+        
+    return templates.TemplateResponse(request, 'admin/user_detail.html', {
+        'user_detail': user,  # Named 'user_detail' so it doesn't clash with context 'user'
+        'events': events,
+        'event_admin_map': event_admin_map
+    })
+
+
+@app.post('/admin/users/{user_id}/toggle-admin', dependencies=[Depends(require_admin)])
+async def admin_toggle_user_admin(request: Request, user_id: int):
+    from portal.database import get_session, get_user_by_id
+    from sqlalchemy import update
+    from portal.models import User
+
+    async with get_session() as session:
+        user = await get_user_by_id(session, user_id)
+        if user:
+            stmt = update(User).where(User.id == user_id).values(is_admin=not user.is_admin)
+            await session.execute(stmt)
+            await session.commit()
+    return RedirectResponse(url=f'/admin/users/{user_id}/', status_code=status.HTTP_303_SEE_OTHER)
+
+
+@app.post('/admin/users/{user_id}/events/{event_id}/toggle-admin', dependencies=[Depends(require_admin)])
+async def admin_toggle_user_event_admin(request: Request, user_id: int, event_id: int):
+    from portal.database import get_session, get_user_by_id, list_memberships_for_user, set_event_membership, remove_event_membership
+
+    async with get_session() as session:
+        user = await get_user_by_id(session, user_id)
+        if user:
+            memberships = await list_memberships_for_user(session, user_id)
+            event_admin_membership = next((m for m in memberships if m.event_id == event_id and m.role == 'event_admin'), None)
+            
+            if event_admin_membership:
+                await remove_event_membership(session, event_admin_membership.id)
+            else:
+                await set_event_membership(session, user_id=user_id, event_id=event_id, role='event_admin')
+                
+    return RedirectResponse(url=f'/admin/users/{user_id}/', status_code=status.HTTP_303_SEE_OTHER)
+
 
 # ── Admin event membership routes ────────────────────────────────────────────
 
@@ -1364,20 +1464,20 @@ async def admin_event_members(request: Request, event_id: int):
 
 @app.post('/admin/events/{event_id}/members/', dependencies=[Depends(require_admin)])
 async def admin_add_event_member(request: Request, event_id: int):
-    from portal.database import get_session, list_memberships_for_event, remove_event_membership, set_event_membership
+    from portal.database import get_session, list_memberships_for_event, remove_event_membership, set_event_membership, get_user_by_email
 
     form = await request.form()
-    user_id = form.get('user_id', '')
+    email = form.get('email', '').strip()
     role = form.get('role', '').strip()
-    if user_id:
-        try:
-            uid = int(user_id)
-        except ValueError:
-            return RedirectResponse(
-                url=f'/admin/events/{event_id}/members/',
-                status_code=status.HTTP_303_SEE_OTHER,
-            )
+    if email:
         async with get_session() as session:
+            user = await get_user_by_email(session, email)
+            if not user:
+                return RedirectResponse(
+                    url=f'/admin/events/{event_id}/members/?error=user_not_found',
+                    status_code=status.HTTP_303_SEE_OTHER,
+                )
+            uid = user.id
             if role:
                 await set_event_membership(session, user_id=uid, event_id=event_id, role=role)
             else:
