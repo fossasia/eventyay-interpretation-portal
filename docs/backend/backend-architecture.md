@@ -11,10 +11,13 @@ The backend is a FastAPI application using native WebSocket for realtime communi
 | FastAPI | — | HTTP server, route handling, ASGI |
 | uvicorn | — | ASGI server |
 | WebSocket (FastAPI native) | — | Realtime booth coordination |
+| SQLAlchemy | 2.0+ | Async ORM for persistent entities |
+| Alembic | 1.15+ | Database migration framework |
+| aiosqlite | — | Async SQLite driver (development) |
 | PyJWT | — | JWT token authentication |
 | pydantic-settings | — | Environment variable loading and validation |
-| MediaMTX | bluenviron/mediamtx:1 | WHIP ingest and HLS delivery (external service) |
-| Python | 3.12.x | Runtime |
+| MediaMTX | bluenviron/mediamtx:1 | WHIP ingest, WHEP playback, and HLS fallback (external service) |
+| Python | 3.13.x | Runtime |
 | uv | — | Dependency management and venv |
 
 ---
@@ -27,14 +30,23 @@ portal/
 ├── __init__.py
 ├── config.py                # Settings via pydantic-settings loaded from env vars
 ├── auth.py                  # JWT authentication via PyJWT
-└── booth_state.py           # Async in-memory booth registry and state machine
+├── booth_state.py           # Async in-memory booth registry and state machine
+├── booth_identity.py        # Booth ID ↔ MediaMTX path mapping
+├── roles.py                 # Permission enum, role-permission mapping
+├── models.py                # SQLAlchemy 2.0 declarative models
+└── database.py              # Async engine, session factory, CRUD helpers
+alembic/
+├── env.py                   # Async-aware migration environment
+└── versions/                # Migration scripts (committed to VCS)
 templates/
 ├── base.html                # Page shell (Eventyay-style header)
 ├── interpreter_booth.html   # Booth page (server-rendered with Jinja2)
-└── listen.html              # HLS listener page with hls.js
+├── listener-webrtc.html     # WHEP WebRTC listener page (primary)
+└── listen.html              # HLS listener page with hls.js (fallback)
 static/
 └── js/
-    └── interpreter-booth.js # Plain ES module: state machine, WebSocket, WHIP, UI
+    ├── interpreter-booth.js # Plain ES module: state machine, WebSocket, WHIP, UI
+    └── whep-listener.js     # WHEP WebRTC listener client
 ```
 
 ---
@@ -48,7 +60,8 @@ static/
 | `GET` | `/` | Redirect to `/interpreter/demo-booth` |
 | `GET` | `/healthz` | Health check |
 | `GET` | `/interpreter/{booth_id}` | Render interpreter booth page (Jinja2) |
-| `GET` | `/listen/{booth_id}` | Render HLS listener page (Jinja2) |
+| `GET` | `/listener-webrtc/{booth_id}` | Render WHEP WebRTC listener page (primary) |
+| `GET` | `/listen/{booth_id}` | Render HLS listener page (fallback) |
 | `GET` | `/api/booth/{booth_id}/state` | Fetch current booth state snapshot |
 
 ### WebSocket endpoint
@@ -177,7 +190,46 @@ JavaScript in `static/js/interpreter-booth.js` reads these values and drives the
 
 ### `templates/listen.html`
 
-Renders the HLS listener page for a specific booth. Uses hls.js with auto-recovery to play the interpretation audio stream from MediaMTX.
+Renders the HLS fallback listener page for a specific booth. Uses hls.js with auto-recovery to play the interpretation audio stream from MediaMTX.
+
+### `templates/listener-webrtc.html`
+
+Renders the primary WHEP listener page. Uses `RTCPeerConnection` to connect to MediaMTX's WHEP endpoint for sub-second latency WebRTC playback. Includes automatic reconnection and debug panels.
+
+---
+
+## Database layer
+
+### Two data stores
+
+| Store | Technology | Contents | Lifetime |
+|---|---|---|---|
+| SQLAlchemy database | SQLite (dev) / PostgreSQL (prod) | Events, rooms, booths, invite tokens | Persistent |
+| In-memory dicts | `booth_state.py` | WebSocket state, active interpreters | Ephemeral |
+
+### Models (`portal/models.py`)
+
+Four tables: `events` → `rooms` → `booths` → `invite_tokens`, with cascade
+deletes flowing downward. `DBBooth.mediamtx_path` is a computed `@property`,
+not a stored column.
+
+### CRUD helpers (`portal/database.py`)
+
+Async session factory with lazy-init engine. 18 CRUD functions cover all
+entity operations. Uses `joinedload` for booth→event relationship (needed for
+`mediamtx_path`).
+
+### Migrations (`alembic/`)
+
+Async-aware `env.py` reads `settings.database_url`. Migrations run
+automatically on container start (`alembic upgrade head`).
+
+### Configuration
+
+Controlled by `DATABASE_URL` env var. Default: `sqlite+aiosqlite:///./interpretation.db`.
+Switch to PostgreSQL by changing the URL to `postgresql+asyncpg://...`.
+
+For full details, see [database-guide.md](database-guide.md).
 
 ---
 
@@ -190,7 +242,7 @@ Renders the HLS listener page for a specific booth. Uses hls.js with auto-recove
 - Booth state is lost on server restart.
 - Multi-worker deployments will have separate state per worker — participants in different workers will not see each other.
 
-**Production fix:** Add PostgreSQL persistence for `Booth` and `Participant` records, and use a shared pub/sub layer (e.g., Redis) for cross-worker WebSocket broadcasting.
+**Production fix:** Add a shared pub/sub layer (e.g., Redis) for cross-worker WebSocket broadcasting. Structural data (events, rooms, booths) is already persisted in the database.
 
 ### JWT secret
 

@@ -6,7 +6,23 @@ from datetime import datetime, timezone
 from typing import Literal
 from uuid import uuid4
 
-ParticipantRole = Literal['interpreter', 'coordinator', 'listener']
+from portal.booth_identity import (
+    BoothInstance,
+    make_booth_id,
+    make_mediamtx_path,
+    parse_booth_id,
+    validate_event_slug,
+    validate_instance,
+    validate_language_code,
+)
+
+ParticipantRole = Literal[
+    'super_admin',
+    'event_admin',
+    'coordinator',
+    'interpreter',
+    'listener',
+]
 
 
 def utc_now_iso() -> str:
@@ -39,17 +55,34 @@ class ChatMessage:
 @dataclass
 class Booth:
     booth_id: str
+    event_slug: str
+    language_code: str
     language: str
     channel_id: str
+    instance: BoothInstance = 'primary'
+    mediamtx_path: str = ''
+    room_id: int | None = None
     active_interpreter_id: str | None = None
     handoff_state: str = 'idle'
     participants: dict[str, Participant] = field(default_factory=dict)
     chat_messages: list[ChatMessage] = field(default_factory=list)
     ingest_status: str = 'disconnected'
 
+    def __post_init__(self) -> None:
+        if self.event_slug and self.language_code:
+            if not self.mediamtx_path:
+                self.mediamtx_path = make_mediamtx_path(self.event_slug, self.language_code)
+            if not self.channel_id:
+                self.channel_id = self.mediamtx_path
+
     def as_public_dict(self) -> dict:
         return {
             'booth_id': self.booth_id,
+            'event_slug': self.event_slug,
+            'language_code': self.language_code,
+            'instance': self.instance,
+            'mediamtx_path': self.mediamtx_path,
+            'room_id': self.room_id,
             'language': self.language,
             'channel_id': self.channel_id,
             'active_interpreter_id': self.active_interpreter_id,
@@ -72,22 +105,96 @@ class BoothRegistry:
         self._booths: dict[str, Booth] = {}
         self._lock = asyncio.Lock()
 
-    def _get_or_create_booth(self, booth_id: str, language: str, channel_id: str) -> Booth:
+    def _get_or_create_booth(
+        self,
+        booth_id: str,
+        language: str,
+        channel_id: str,
+        room_id: int | None = None,
+    ) -> Booth:
         """Return existing booth or create one. Caller must hold self._lock.
 
-        ``language`` and ``channel_id`` are only used when *creating* the booth;
-        they are treated as immutable once set so that a later request from a
-        different client cannot silently change the booth's canonical values.
+        ``language``, ``channel_id``, and ``room_id`` are only used when
+        *creating* the booth; they are treated as immutable once set so that
+        a later request from a different client cannot silently change the
+        booth's canonical values.
+
+        The ``booth_id`` is parsed into ``event_slug`` and ``language_code``
+        using :func:`parse_booth_id`.  If parsing fails (legacy free-form ID),
+        the booth is still created with empty identity fields so existing
+        callers continue to work during the migration window.
         """
         booth = self._booths.get(booth_id)
         if booth is None:
-            booth = Booth(booth_id=booth_id, language=language, channel_id=channel_id)
+            try:
+                event_slug, language_code = parse_booth_id(booth_id)
+            except ValueError:
+                event_slug = ''
+                language_code = ''
+            booth = Booth(
+                booth_id=booth_id,
+                event_slug=event_slug,
+                language_code=language_code,
+                language=language,
+                channel_id=channel_id,
+                room_id=room_id,
+            )
             self._booths[booth_id] = booth
         return booth
 
-    async def snapshot(self, booth_id: str, language: str, channel_id: str) -> dict:
+    async def create_booth(
+        self,
+        event_slug: str,
+        language_code: str,
+        language: str,
+        channel_id: str = '',
+        instance: BoothInstance = 'primary',
+        room_id: int | None = None,
+    ) -> dict:
+        """Create a booth using validated identity coordinates.
+
+        This is the preferred entry point for new code.  The booth ID,
+        MediaMTX path, and default ``channel_id`` are derived automatically
+        from the coordinates.  When no explicit ``channel_id`` is given it
+        defaults to the MediaMTX path (``{event_slug}/{language_code}``).
+
+        ``room_id`` is an optional foreign key to an Eventyay Room.  It is
+        nullable and has no effect on booth identity — it exists to support
+        future Eventyay integration.
+
+        Raises ``ValueError`` if the slug or language code is invalid, or if
+        a booth with the same ID already exists.
+        """
+        slug = validate_event_slug(event_slug)
+        code = validate_language_code(language_code)
+        inst = validate_instance(instance)
+        booth_id = make_booth_id(slug, code)
+        mtx_path = make_mediamtx_path(slug, code)
+
         async with self._lock:
-            return self._get_or_create_booth(booth_id, language, channel_id).as_public_dict()
+            if booth_id in self._booths:
+                raise ValueError(f"Booth '{booth_id}' already exists.")
+            booth = Booth(
+                booth_id=booth_id,
+                event_slug=slug,
+                language_code=code,
+                language=language,
+                channel_id=channel_id or mtx_path,
+                instance=inst,
+                room_id=room_id,
+            )
+            self._booths[booth_id] = booth
+            return booth.as_public_dict()
+
+    async def snapshot(
+        self,
+        booth_id: str,
+        language: str,
+        channel_id: str,
+        room_id: int | None = None,
+    ) -> dict:
+        async with self._lock:
+            return self._get_or_create_booth(booth_id, language, channel_id, room_id=room_id).as_public_dict()
 
     async def join_participant(
         self,
@@ -97,9 +204,10 @@ class BoothRegistry:
         language: str,
         channel_id: str,
         participant_id: str | None = None,
+        room_id: int | None = None,
     ) -> tuple[Participant, dict]:
         async with self._lock:
-            booth = self._get_or_create_booth(booth_id, language, channel_id)
+            booth = self._get_or_create_booth(booth_id, language, channel_id, room_id=room_id)
             participant = Participant(
                 participant_id=participant_id or uuid4().hex,
                 display_name=display_name.strip() or 'Interpreter',
@@ -201,6 +309,8 @@ class BoothRegistry:
             if participant is None:
                 raise ValueError('Participant does not exist in booth.')
             wants_publisher_state = mic_active is True or ingest_connected is True
+            if wants_publisher_state and participant.role != 'interpreter':
+                raise PermissionError('Only interpreter role can publish audio.')
             if wants_publisher_state and booth.active_interpreter_id != participant_id:
                 raise PermissionError('Only the active interpreter can mark mic or ingest active.')
             if mic_active is not None:
@@ -215,10 +325,70 @@ class BoothRegistry:
             )
             return booth.as_public_dict()
 
+    async def check_publish_permission(
+        self,
+        booth_id: str,
+        participant_id: str,
+        language: str,
+        channel_id: str,
+    ) -> None:
+        """Raise PermissionError if participant may not publish audio.
+
+        Checks two conditions (Layer 1 enforcement):
+        1. Participant must have the ``interpreter`` role.
+        2. Participant must be the booth's active interpreter.
+        """
+        async with self._lock:
+            booth = self._get_or_create_booth(booth_id, language, channel_id)
+            participant = booth.participants.get(participant_id)
+            if participant is None:
+                raise ValueError('Participant does not exist in booth.')
+            if participant.role != 'interpreter':
+                raise PermissionError('Only interpreter role can publish audio.')
+            if booth.active_interpreter_id != participant_id:
+                raise PermissionError('Only the active interpreter can publish audio.')
+
     async def is_active_interpreter(self, booth_id: str, participant_id: str, language: str, channel_id: str) -> bool:
         async with self._lock:
             booth = self._get_or_create_booth(booth_id, language, channel_id)
             return booth.active_interpreter_id == participant_id
+
+    async def list_booths_for_event(self, event_slug: str) -> list[dict]:
+        """Return public snapshots of all booths belonging to *event_slug*."""
+        async with self._lock:
+            return [
+                booth.as_public_dict()
+                for booth in self._booths.values()
+                if booth.event_slug == event_slug
+            ]
+
+    async def get_booth(self, booth_id: str) -> dict | None:
+        """Return the public dict for an existing booth, or None."""
+        async with self._lock:
+            booth = self._booths.get(booth_id)
+            return booth.as_public_dict() if booth is not None else None
+
+    async def get_booth_for_event(self, event_slug: str, language_code: str) -> dict | None:
+        """Return the booth for a specific event + language, or None.
+
+        Unlike :meth:`snapshot`, this never auto-creates a booth.
+        """
+        booth_id = make_booth_id(event_slug, language_code)
+        return await self.get_booth(booth_id)
+
+    async def validate_booth_event(self, booth_id: str, expected_event: str) -> None:
+        """Raise PermissionError if *booth_id* does not belong to *expected_event*.
+
+        Used by event-scoped API endpoints to prevent cross-event access.
+        """
+        try:
+            event_slug, _ = parse_booth_id(booth_id)
+        except ValueError:
+            event_slug = ''
+        if event_slug != expected_event:
+            raise PermissionError(
+                f"Booth '{booth_id}' does not belong to event '{expected_event}'."
+            )
 
     async def set_ingest_status(self, booth_id: str, status: str, language: str, channel_id: str) -> dict:
         async with self._lock:

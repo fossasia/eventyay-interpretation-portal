@@ -21,7 +21,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
-from portal.auth import create_token, decode_token, security, verify_ws_token
+from portal.auth import create_participant_token, create_token, decode_token, security, verify_ws_token
+from portal.booth_identity import make_booth_id, make_mediamtx_path
 from portal.booth_state import BoothRegistry
 from portal.config import settings
 
@@ -117,6 +118,50 @@ async def _check_mediamtx() -> bool:
         return False
 
 
+# Track which channel paths have already been created this process lifetime
+# to avoid redundant API calls on every page load.
+_created_paths: set[str] = set()
+
+
+async def _ensure_mediamtx_path(channel_id: str) -> None:
+    """Create a named MediaMTX path with alwaysAvailable if it doesn't exist.
+
+    alwaysAvailable keeps the stream alive during publisher handoffs so WHEP
+    readers don't get disconnected.  This cannot be set on the wildcard
+    all_others path, so we create named paths via the Control API.
+
+    Uses ADD first; if the path already exists, PATCHes it to ensure
+    alwaysAvailable is set (handles MediaMTX restarts where the runtime
+    config was lost while the portal's in-memory cache was stale).
+    """
+    if channel_id in _created_paths:
+        return
+    api_base = settings.mediamtx_api_base
+    if not api_base:
+        return
+    body = {
+        'alwaysAvailable': True,
+        'alwaysAvailableTracks': [{'codec': 'Opus'}],
+        'overridePublisher': True,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            r = await client.post(
+                f'{api_base}/v3/config/paths/add/{channel_id}', json=body,
+            )
+            if r.status_code == 200:
+                _created_paths.add(channel_id)
+            elif r.status_code == 400 and 'already exists' in r.text.lower():
+                # Path exists but may lack alwaysAvailable — patch it
+                r2 = await client.patch(
+                    f'{api_base}/v3/config/paths/patch/{channel_id}', json=body,
+                )
+                if r2.status_code == 200:
+                    _created_paths.add(channel_id)
+    except (httpx.ConnectError, httpx.TimeoutException, httpx.RequestError):
+        pass  # Non-fatal; path will use all_others defaults
+
+
 def _require_access(
     credentials: HTTPAuthorizationCredentials | None,
     token_query: str = '',
@@ -135,6 +180,24 @@ def _require_access(
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Invalid or missing auth token.')
 
 
+async def _resolve_whip_url(booth_id: str, participant_id: str, language: str, channel_id: str) -> dict:
+    """Check publish permission and return the WHIP URL payload.
+
+    Shared by both the legacy ``/api/booth/{id}/whip-url`` endpoint and the
+    event-scoped ``/api/events/{slug}/booths/{lang}/whip-url`` endpoint.
+    Raises :class:`HTTPException` on permission/lookup failures.
+    """
+    try:
+        await booths.check_publish_permission(booth_id, participant_id, language, channel_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+    await _ensure_mediamtx_path(channel_id)
+    whip_url = f'{settings.mediamtx_whip_base}/{channel_id}/whip'
+    return {'whip_url': whip_url, 'channel_id': channel_id, 'booth_id': booth_id}
+
+
 # ── Pydantic request models ───────────────────────────────────────────────────
 
 class TokenRequest(BaseModel):
@@ -146,6 +209,13 @@ class TokenResponse(BaseModel):
     token_type: str = 'bearer'
 
 
+class CreateBoothRequest(BaseModel):
+    language_code: str
+    language: str = ''
+    room_id: int | None = None
+    instance: str = 'primary'
+
+
 # ── Auth endpoint ─────────────────────────────────────────────────────────────
 
 @app.post('/api/auth/token', response_model=TokenResponse)
@@ -154,6 +224,49 @@ async def get_token(body: Annotated[TokenRequest | None, Body()] = None) -> Toke
     if settings.booth_access_token and provided != settings.booth_access_token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Invalid access token.')
     return TokenResponse(access_token=create_token())
+
+
+# ── Invite-token join flow ────────────────────────────────────────────────────
+
+@app.get('/join/{token}')
+async def join_via_invite(token: str) -> RedirectResponse:
+    """Validate an invite token, issue a JWT cookie, and redirect to the booth.
+
+    Flow:
+    1. Look up the token in the database
+    2. Validate: not expired, not already used
+    3. Mark the token as used (``used_at = now``)
+    4. Issue a signed JWT cookie with role claims
+    5. Redirect to ``/interpreter/{event_slug}/{language_code}``
+    """
+    from portal.database import get_session, redeem_invite_token
+
+    async with get_session() as session:
+        try:
+            tok = await redeem_invite_token(session, token)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+
+    if tok is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Invalid invite token.')
+
+    jwt_token = create_participant_token(
+        booth_id=tok.booth_id,
+        role=tok.role,
+        event_slug=tok.booth.event.slug,
+        language_code=tok.booth.language_code,
+    )
+
+    redirect_url = f'/interpreter/{tok.booth.event.slug}/{tok.booth.language_code}'
+    response = RedirectResponse(url=redirect_url, status_code=status.HTTP_303_SEE_OTHER)
+    response.set_cookie(
+        key='session_token',
+        value=jwt_token,
+        httponly=True,
+        samesite='lax',
+        max_age=settings.jwt_expiry_seconds,
+    )
+    return response
 
 
 # ── Page routes ───────────────────────────────────────────────────────────────
@@ -172,6 +285,51 @@ async def healthz() -> dict:
     }
 
 
+@app.get('/interpreter/{event_slug}/{language_code}')
+async def interpreter_booth_by_identity(
+    request: Request,
+    event_slug: str,
+    language_code: str,
+    token: str = '',
+    language: str = '',
+) -> Any:
+    """Booth page addressed by event_slug and language_code (preferred URL).
+
+    Derives booth_id, channel_id, WHIP URL, and WHEP URL from the identity
+    coordinates.  The MediaMTX path is created on first access.
+    """
+    booth_id = make_booth_id(event_slug, language_code)
+    mediamtx_path = make_mediamtx_path(event_slug, language_code)
+    channel_id = mediamtx_path
+    display_language = language or language_code.upper()
+    await _ensure_mediamtx_path(channel_id)
+    whip_url = f'{settings.mediamtx_whip_base}/{mediamtx_path}/whip'
+    whep_url = f'{settings.mediamtx_whip_base}/{mediamtx_path}/whep'
+    return templates.TemplateResponse(
+        request,
+        'interpreter_booth.html',
+        {
+            'booth_id': booth_id,
+            'booth_token': token,
+            'booth_language': display_language,
+            'booth_channel_id': channel_id,
+            'event_slug': event_slug,
+            'language_code': language_code,
+            'whip_url': whip_url,
+            'whep_url': whep_url,
+            'default_jitsi_room': settings.default_jitsi_room,
+            'default_jitsi_url': _make_jitsi_url(
+                settings.effective_jitsi_base_url, settings.default_jitsi_room
+            ),
+            'jitsi_domain': settings.effective_jitsi_domain,
+            'jitsi_base_url': settings.effective_jitsi_base_url,
+            'mediamtx_whip_base': settings.mediamtx_whip_base,
+            'mediamtx_hls_base': settings.mediamtx_hls_base,
+            'js_version': _JS_CACHE_BUST,
+        },
+    )
+
+
 @app.get('/interpreter/{booth_id}')
 async def interpreter_booth(
     request: Request,
@@ -181,6 +339,7 @@ async def interpreter_booth(
     channel: str | None = Query(None),
 ) -> Any:
     channel_id = channel or f'{booth_id}-audio'
+    await _ensure_mediamtx_path(channel_id)
     return templates.TemplateResponse(
         request,
         'interpreter_booth.html',
@@ -224,6 +383,30 @@ async def listen_booth(
     )
 
 
+@app.get('/listener-webrtc/{booth_id}')
+async def listen_webrtc_booth(
+    request: Request,
+    booth_id: str,
+    language: str = 'English',
+    channel: str | None = Query(None),
+) -> Any:
+    """Listener page using WHEP/WebRTC for low-latency playback."""
+    channel_id = channel or f'{booth_id}-audio'
+    await _ensure_mediamtx_path(channel_id)
+    whep_url = f'{settings.mediamtx_whip_base}/{channel_id}/whep'
+    return templates.TemplateResponse(
+        request,
+        'listener-webrtc.html',
+        {
+            'booth_id': booth_id,
+            'language': language,
+            'channel_id': channel_id,
+            'whep_url': whep_url,
+            'js_version': _JS_CACHE_BUST,
+        },
+    )
+
+
 # ── REST API ──────────────────────────────────────────────────────────────────
 
 @app.get('/api/booth/{booth_id}/state')
@@ -232,12 +415,123 @@ async def booth_state_api(
     token: str = Query(''),
     language: str = 'English',
     channel: str | None = Query(None),
+    room: int | None = Query(None),
     credentials: HTTPAuthorizationCredentials | None = Depends(security),
 ) -> dict:
     _require_access(credentials, token)
     channel_id = channel or f'{booth_id}-audio'
-    return await booths.snapshot(booth_id, language, channel_id)
+    return await booths.snapshot(booth_id, language, channel_id, room_id=room)
 
+
+@app.get('/api/booth/{booth_id}/whip-url')
+async def booth_whip_url(
+    booth_id: str,
+    participant_id: str = Query(...),
+    token: str = Query(''),
+    language: str = 'English',
+    channel: str | None = Query(None),
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+) -> dict:
+    """Return the WHIP ingest URL only if the caller is the active interpreter.
+
+    Layer 2 enforcement: the browser must call this endpoint before starting
+    a WHIP session. Non-active interpreters and non-interpreter roles receive
+    a 403 response and never learn the WHIP URL.
+    """
+    _require_access(credentials, token)
+    channel_id = channel or f'{booth_id}-audio'
+    return await _resolve_whip_url(booth_id, participant_id, language, channel_id)
+
+
+@app.post('/api/events/{event_slug}/booths', status_code=status.HTTP_201_CREATED)
+async def create_event_booth(
+    event_slug: str,
+    body: CreateBoothRequest,
+    token: str = Query(''),
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+) -> dict:
+    """Create a booth for an event.
+
+    Returns the booth state including derived booth_id, MediaMTX path,
+    WHIP URL, and WHEP URL.
+    """
+    _require_access(credentials, token)
+    try:
+        state = await booths.create_booth(
+            event_slug=event_slug,
+            language_code=body.language_code,
+            language=body.language or body.language_code.upper(),
+            instance=body.instance,
+            room_id=body.room_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    mediamtx_path = state['mediamtx_path']
+    await _ensure_mediamtx_path(mediamtx_path)
+    state['whip_url'] = f'{settings.mediamtx_whip_base}/{mediamtx_path}/whip'
+    state['whep_url'] = f'{settings.mediamtx_whip_base}/{mediamtx_path}/whep'
+    return state
+
+
+@app.get('/api/events/{event_slug}/booths')
+async def list_event_booths(
+    event_slug: str,
+    token: str = Query(''),
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+) -> dict:
+    """List all booths for an event."""
+    _require_access(credentials, token)
+    booth_list = await booths.list_booths_for_event(event_slug)
+    for b in booth_list:
+        mtx = b.get('mediamtx_path', '')
+        if mtx:
+            b['whip_url'] = f'{settings.mediamtx_whip_base}/{mtx}/whip'
+            b['whep_url'] = f'{settings.mediamtx_whip_base}/{mtx}/whep'
+    return {'event_slug': event_slug, 'booths': booth_list}
+
+
+@app.get('/api/events/{event_slug}/booths/{language_code}/state')
+async def event_booth_state(
+    event_slug: str,
+    language_code: str,
+    token: str = Query(''),
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+) -> dict:
+    """Event-scoped booth state — never auto-creates a booth.
+
+    Returns 404 if the booth does not exist for this event.
+    """
+    _require_access(credentials, token)
+    state = await booths.get_booth_for_event(event_slug, language_code)
+    if state is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No booth for language '{language_code}' in event '{event_slug}'.",
+        )
+    return state
+
+
+@app.get('/api/events/{event_slug}/booths/{language_code}/whip-url')
+async def event_booth_whip_url(
+    event_slug: str,
+    language_code: str,
+    participant_id: str = Query(...),
+    token: str = Query(''),
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+) -> dict:
+    """Event-scoped WHIP URL — validates event ownership before returning.
+
+    Combines event namespace isolation (booth must belong to event) with
+    Layer 2 active-interpreter enforcement.
+    """
+    _require_access(credentials, token)
+    booth_id = make_booth_id(event_slug, language_code)
+    channel_id = make_mediamtx_path(event_slug, language_code)
+    try:
+        await booths.validate_booth_event(booth_id, event_slug)
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+    return await _resolve_whip_url(booth_id, participant_id, language_code.upper(), channel_id)
 
 
 @app.get('/api/interpreter/status/{channel_id}')
@@ -258,6 +552,21 @@ async def _handle_join(ws: WebSocket, session: Session, data: dict) -> None:
     language = data.get('language', 'English')
     channel_id = data.get('channel_id', f'{session.booth_id}-audio')
     participant_id = data.get('participant_id')
+    # Cross-event isolation: reject if client-supplied event_slug doesn't match
+    client_event = data.get('event_slug')
+    if client_event is not None:
+        try:
+            await booths.validate_booth_event(session.booth_id, client_event)
+        except PermissionError as exc:
+            await ws.send_text(json.dumps({'type': 'booth:error', 'message': str(exc)}))
+            return
+    room_id = data.get('room_id')
+    if room_id is not None:
+        try:
+            room_id = int(room_id)
+        except (TypeError, ValueError):
+            await ws.send_text(json.dumps({'type': 'booth:error', 'message': 'room_id must be an integer.'}))
+            return
     try:
         participant, state = await booths.join_participant(
             booth_id=session.booth_id,
@@ -266,6 +575,7 @@ async def _handle_join(ws: WebSocket, session: Session, data: dict) -> None:
             language=language,
             channel_id=channel_id,
             participant_id=participant_id,
+            room_id=room_id,
         )
     except (ValueError, PermissionError) as exc:
         await ws.send_text(json.dumps({'type': 'booth:error', 'message': str(exc)}))

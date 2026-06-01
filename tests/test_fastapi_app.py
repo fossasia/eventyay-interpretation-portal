@@ -491,3 +491,443 @@ def test_ws_coordinator_can_switch_active_interpreter():
     assert state_msg is not None, 'Expected a booth:state after set-active'
     assert state_msg['state']['active_interpreter_id'] == pid_a
 
+
+# ── Layer 2: WHIP URL gated endpoint tests ────────────────────────────────────
+
+def test_whip_url_active_interpreter_gets_url():
+    """Active interpreter receives a WHIP URL from the gated endpoint."""
+    booth = 'whip-gate-booth'
+    channel = f'{booth}-audio'
+    with client.websocket_connect(f'/ws/booth/{booth}') as ws:
+        ws.send_text(json.dumps({
+            'type': 'booth:join', 'display_name': 'Active',
+            'role': 'interpreter', 'language': 'English', 'channel_id': channel,
+        }))
+        joined = json.loads(ws.receive_text())
+        if joined['type'] != 'booth:joined':
+            joined = json.loads(ws.receive_text())
+        pid = joined['participant_id']
+        ws.receive_text()  # drain booth:state
+
+        res = client.get(
+            f'/api/booth/{booth}/whip-url',
+            params={'participant_id': pid, 'language': 'English', 'channel': channel},
+        )
+
+    assert res.status_code == 200
+    body = res.json()
+    assert 'whip_url' in body
+    assert body['channel_id'] == channel
+    assert body['booth_id'] == booth
+    assert body['whip_url'].endswith(f'/{channel}/whip')
+
+
+def test_whip_url_standby_interpreter_rejected():
+    """Standby interpreter receives 403 from the WHIP URL endpoint."""
+    booth = 'whip-standby-booth'
+    channel = f'{booth}-audio'
+    with client.websocket_connect(f'/ws/booth/{booth}') as ws_a, \
+         client.websocket_connect(f'/ws/booth/{booth}') as ws_b:
+
+        # IntA joins first → becomes active
+        ws_a.send_text(json.dumps({
+            'type': 'booth:join', 'display_name': 'IntA',
+            'role': 'interpreter', 'language': 'English', 'channel_id': channel,
+        }))
+        ws_a.receive_text()  # booth:joined
+        ws_a.receive_text()  # booth:state
+        ws_b.receive_text()  # booth:state broadcast
+
+        # IntB joins → standby
+        ws_b.send_text(json.dumps({
+            'type': 'booth:join', 'display_name': 'IntB',
+            'role': 'interpreter', 'language': 'English', 'channel_id': channel,
+        }))
+        joined_b = json.loads(ws_b.receive_text())
+        if joined_b['type'] != 'booth:joined':
+            joined_b = json.loads(ws_b.receive_text())
+        pid_b = joined_b['participant_id']
+        ws_b.receive_text()  # drain booth:state
+        ws_a.receive_text()  # drain broadcast to ws_a
+
+        res = client.get(
+            f'/api/booth/{booth}/whip-url',
+            params={'participant_id': pid_b, 'language': 'English', 'channel': channel},
+        )
+
+    assert res.status_code == 403
+    assert 'active interpreter' in res.json()['detail'].lower()
+
+
+def test_whip_url_coordinator_rejected():
+    """Coordinator role receives 403 from the WHIP URL endpoint."""
+    booth = 'whip-coord-booth'
+    channel = f'{booth}-audio'
+    with client.websocket_connect(f'/ws/booth/{booth}') as ws:
+        ws.send_text(json.dumps({
+            'type': 'booth:join', 'display_name': 'Coord',
+            'role': 'coordinator', 'language': 'English', 'channel_id': channel,
+        }))
+        joined = json.loads(ws.receive_text())
+        if joined['type'] != 'booth:joined':
+            joined = json.loads(ws.receive_text())
+        pid = joined['participant_id']
+        ws.receive_text()  # drain booth:state
+
+        res = client.get(
+            f'/api/booth/{booth}/whip-url',
+            params={'participant_id': pid, 'language': 'English', 'channel': channel},
+        )
+
+    assert res.status_code == 403
+    assert 'interpreter role' in res.json()['detail'].lower()
+
+
+def test_whip_url_unknown_participant_returns_404():
+    """Unknown participant_id returns 404."""
+    res = client.get(
+        '/api/booth/whip-404-booth/whip-url',
+        params={'participant_id': 'nonexistent', 'language': 'English'},
+    )
+    assert res.status_code == 404
+
+
+def test_whip_url_missing_participant_id_returns_422():
+    """Missing required participant_id query param returns 422."""
+    res = client.get('/api/booth/whip-missing-booth/whip-url')
+    assert res.status_code == 422
+
+
+# ── Booth bootstrap flow tests (Issue #61) ────────────────────────────────────
+
+def test_create_event_booth():
+    """POST /api/events/{slug}/booths creates a booth and returns WHIP/WHEP URLs."""
+    res = client.post('/api/events/pycon2026/booths', json={
+        'language_code': 'en',
+        'language': 'English',
+        'room_id': 42,
+    })
+    assert res.status_code == 201
+    body = res.json()
+    assert body['booth_id'] == 'pycon2026-en'
+    assert body['event_slug'] == 'pycon2026'
+    assert body['language_code'] == 'en'
+    assert body['mediamtx_path'] == 'pycon2026/en'
+    assert body['room_id'] == 42
+    assert body['whip_url'].endswith('/pycon2026/en/whip')
+    assert body['whep_url'].endswith('/pycon2026/en/whep')
+
+
+def test_create_event_booth_duplicate_returns_400():
+    """Creating the same booth twice returns 400."""
+    client.post('/api/events/duptest/booths', json={'language_code': 'fr', 'language': 'French'})
+    res = client.post('/api/events/duptest/booths', json={'language_code': 'fr', 'language': 'French'})
+    assert res.status_code == 400
+    assert 'already exists' in res.json()['detail']
+
+
+def test_create_event_booth_invalid_language_code():
+    """Invalid language code returns 400."""
+    res = client.post('/api/events/pycon2026/booths', json={
+        'language_code': 'xyz',
+        'language': 'Unknown',
+    })
+    assert res.status_code == 400
+
+
+def test_create_event_booth_invalid_event_slug():
+    """Invalid event slug returns 400."""
+    res = client.post('/api/events/--bad--/booths', json={
+        'language_code': 'en',
+        'language': 'English',
+    })
+    assert res.status_code == 400
+
+
+def test_list_event_booths():
+    """GET /api/events/{slug}/booths lists booths for the event."""
+    client.post('/api/events/listtest/booths', json={'language_code': 'en', 'language': 'English'})
+    client.post('/api/events/listtest/booths', json={'language_code': 'de', 'language': 'German'})
+    client.post('/api/events/other/booths', json={'language_code': 'ja', 'language': 'Japanese'})
+
+    res = client.get('/api/events/listtest/booths')
+    assert res.status_code == 200
+    body = res.json()
+    assert body['event_slug'] == 'listtest'
+    assert len(body['booths']) == 2
+    codes = {b['language_code'] for b in body['booths']}
+    assert codes == {'en', 'de'}
+    # Each booth should have WHEP/WHIP URLs
+    for b in body['booths']:
+        assert 'whip_url' in b
+        assert 'whep_url' in b
+
+
+def test_list_event_booths_empty():
+    """Listing booths for a non-existent event returns empty list."""
+    res = client.get('/api/events/nonexistent/booths')
+    assert res.status_code == 200
+    assert res.json()['booths'] == []
+
+
+def test_interpreter_booth_by_identity_page():
+    """GET /interpreter/{event_slug}/{language_code} renders the booth page."""
+    res = client.get('/interpreter/myevent/en')
+    assert res.status_code == 200
+    assert b'myevent-en' in res.content
+    assert b"data-event-slug='myevent'" in res.content
+    assert b"data-language-code='en'" in res.content
+    assert b'data-whip-url=' in res.content
+    assert b'data-whep-url=' in res.content
+
+
+def test_interpreter_booth_by_identity_whip_whep_urls():
+    """The identity-based booth page has correct WHIP and WHEP URLs."""
+    res = client.get('/interpreter/fossasia/fr')
+    assert res.status_code == 200
+    content = res.content.decode()
+    assert 'fossasia/fr/whip' in content
+    assert 'fossasia/fr/whep' in content
+
+
+def test_legacy_interpreter_booth_still_works():
+    """The old /interpreter/{booth_id} route still works for backward compat."""
+    res = client.get('/interpreter/demo-booth')
+    assert res.status_code == 200
+    assert b'demo-booth' in res.content
+
+
+def test_full_bootstrap_flow():
+    """End-to-end: create booth → access page → join → go live (get WHIP URL)."""
+    # 1. Organiser creates booth via API
+    create_res = client.post('/api/events/bootstrap/booths', json={
+        'language_code': 'es',
+        'language': 'Spanish',
+        'room_id': 5,
+    })
+    assert create_res.status_code == 201
+    booth = create_res.json()
+    booth_id = booth['booth_id']
+    assert booth_id == 'bootstrap-es'
+
+    # 2. Interpreter accesses booth page
+    page_res = client.get('/interpreter/bootstrap/es')
+    assert page_res.status_code == 200
+    assert b'bootstrap-es' in page_res.content
+
+    # 3. Interpreter joins via WebSocket
+    channel = booth['mediamtx_path']
+    with client.websocket_connect(f'/ws/booth/{booth_id}') as ws:
+        ws.send_text(json.dumps({
+            'type': 'booth:join',
+            'display_name': 'Interpreter A',
+            'role': 'interpreter',
+            'language': 'Spanish',
+            'channel_id': channel,
+        }))
+        joined = json.loads(ws.receive_text())
+        if joined['type'] != 'booth:joined':
+            joined = json.loads(ws.receive_text())
+        pid = joined['participant_id']
+        ws.receive_text()  # drain booth:state
+
+        # 4. Active interpreter requests WHIP URL (Go Live)
+        whip_res = client.get(
+            f'/api/booth/{booth_id}/whip-url',
+            params={'participant_id': pid, 'language': 'Spanish', 'channel': channel},
+        )
+        assert whip_res.status_code == 200
+        whip_body = whip_res.json()
+        assert whip_body['whip_url'].endswith(f'/{channel}/whip')
+
+        # 5. Verify WHEP URL is derivable from the same path
+        whep_url = whip_body['whip_url'].replace('/whip', '/whep')
+        assert f'/{channel}/whep' in whep_url
+
+
+# ── Multi-event namespace isolation tests (#62) ──────────────────────────────
+
+
+def test_event_booth_state_returns_existing():
+    """Event-scoped state endpoint returns 200 for an existing booth."""
+    client.post('/api/events/statetest/booths', json={'language_code': 'en', 'language': 'English'})
+    res = client.get('/api/events/statetest/booths/en/state')
+    assert res.status_code == 200
+    body = res.json()
+    assert body['booth_id'] == 'statetest-en'
+    assert body['event_slug'] == 'statetest'
+    assert body['language_code'] == 'en'
+
+
+def test_event_booth_state_404_for_missing():
+    """Event-scoped state returns 404 when booth does not exist."""
+    res = client.get('/api/events/nosuchevent/booths/en/state')
+    assert res.status_code == 404
+    assert 'No booth' in res.json()['detail']
+
+
+def test_event_booth_state_404_wrong_language():
+    """Event-scoped state returns 404 when language not registered."""
+    client.post('/api/events/langtest/booths', json={'language_code': 'fr', 'language': 'French'})
+    res = client.get('/api/events/langtest/booths/de/state')
+    assert res.status_code == 404
+
+
+def test_event_booth_state_does_not_autocreate():
+    """Event-scoped state must not auto-create a booth."""
+    client.get('/api/events/autocreate/booths/en/state')
+    res = client.get('/api/events/autocreate/booths')
+    assert res.json()['booths'] == []
+
+
+def test_event_booth_whip_url_active_interpreter():
+    """Event-scoped WHIP URL returns URL for active interpreter."""
+    client.post('/api/events/whipevent/booths', json={'language_code': 'en', 'language': 'English'})
+    with client.websocket_connect('/ws/booth/whipevent-en') as ws:
+        ws.send_text(json.dumps({
+            'type': 'booth:join',
+            'display_name': 'Interp',
+            'role': 'interpreter',
+            'language': 'English',
+            'channel_id': 'whipevent/en',
+        }))
+        joined = json.loads(ws.receive_text())
+        if joined['type'] != 'booth:joined':
+            joined = json.loads(ws.receive_text())
+        pid = joined['participant_id']
+        ws.receive_text()  # drain booth:state
+
+        res = client.get(
+            '/api/events/whipevent/booths/en/whip-url',
+            params={'participant_id': pid},
+        )
+        assert res.status_code == 200
+        body = res.json()
+        assert body['whip_url'].endswith('/whipevent/en/whip')
+        assert body['booth_id'] == 'whipevent-en'
+
+
+def test_event_booth_whip_url_standby_rejected():
+    """Event-scoped WHIP URL rejects standby interpreter."""
+    client.post('/api/events/whiprej/booths', json={'language_code': 'en', 'language': 'English'})
+    with client.websocket_connect('/ws/booth/whiprej-en') as ws:
+        # First interpreter joins (becomes active)
+        ws.send_text(json.dumps({
+            'type': 'booth:join', 'display_name': 'Active',
+            'role': 'interpreter', 'language': 'English', 'channel_id': 'whiprej/en',
+        }))
+        ws.receive_text()  # joined
+        ws.receive_text()  # state
+
+        # Second interpreter joins (becomes standby)
+        with client.websocket_connect('/ws/booth/whiprej-en') as ws2:
+            ws2.send_text(json.dumps({
+                'type': 'booth:join', 'display_name': 'Standby',
+                'role': 'interpreter', 'language': 'English', 'channel_id': 'whiprej/en',
+            }))
+            joined2 = json.loads(ws2.receive_text())
+            if joined2['type'] != 'booth:joined':
+                joined2 = json.loads(ws2.receive_text())
+            pid2 = joined2['participant_id']
+            ws2.receive_text()  # state
+
+            res = client.get(
+                '/api/events/whiprej/booths/en/whip-url',
+                params={'participant_id': pid2},
+            )
+            assert res.status_code == 403
+
+
+def test_cross_event_listing_isolation():
+    """Booths created under event A must not appear in event B listing."""
+    client.post('/api/events/isolatea/booths', json={'language_code': 'en', 'language': 'English'})
+    client.post('/api/events/isolatea/booths', json={'language_code': 'fr', 'language': 'French'})
+    client.post('/api/events/isolateb/booths', json={'language_code': 'de', 'language': 'German'})
+
+    a_res = client.get('/api/events/isolatea/booths')
+    b_res = client.get('/api/events/isolateb/booths')
+
+    assert len(a_res.json()['booths']) == 2
+    assert len(b_res.json()['booths']) == 1
+    assert all(b['event_slug'] == 'isolatea' for b in a_res.json()['booths'])
+    assert all(b['event_slug'] == 'isolateb' for b in b_res.json()['booths'])
+
+
+def test_cross_event_state_isolation():
+    """Event-scoped state endpoint must not leak booths across events."""
+    client.post('/api/events/eventx/booths', json={'language_code': 'en', 'language': 'English'})
+    # eventx-en exists, but asking eventy for 'en' must return 404
+    res = client.get('/api/events/eventy/booths/en/state')
+    assert res.status_code == 404
+
+
+def test_cross_event_mediamtx_path_isolation():
+    """Two events with the same language must get separate MediaMTX paths."""
+    r1 = client.post('/api/events/confa/booths', json={'language_code': 'en', 'language': 'English'})
+    r2 = client.post('/api/events/confb/booths', json={'language_code': 'en', 'language': 'English'})
+
+    assert r1.json()['mediamtx_path'] == 'confa/en'
+    assert r2.json()['mediamtx_path'] == 'confb/en'
+    assert r1.json()['booth_id'] != r2.json()['booth_id']
+
+
+def test_ws_cross_event_join_rejected():
+    """WebSocket join with mismatched event_slug must be rejected."""
+    client.post('/api/events/evtreal/booths', json={'language_code': 'en', 'language': 'English'})
+    with client.websocket_connect('/ws/booth/evtreal-en') as ws:
+        ws.send_text(json.dumps({
+            'type': 'booth:join',
+            'display_name': 'Attacker',
+            'role': 'interpreter',
+            'language': 'English',
+            'channel_id': 'evtreal/en',
+            'event_slug': 'wrongevent',  # mismatch!
+        }))
+        resp = json.loads(ws.receive_text())
+        assert resp['type'] == 'booth:error'
+        assert 'does not belong' in resp['message']
+
+
+def test_ws_cross_event_join_accepted_with_correct_slug():
+    """WebSocket join with matching event_slug must succeed."""
+    client.post('/api/events/evtok/booths', json={'language_code': 'en', 'language': 'English'})
+    with client.websocket_connect('/ws/booth/evtok-en') as ws:
+        ws.send_text(json.dumps({
+            'type': 'booth:join',
+            'display_name': 'Good Interpreter',
+            'role': 'interpreter',
+            'language': 'English',
+            'channel_id': 'evtok/en',
+            'event_slug': 'evtok',  # correct
+        }))
+        resp = json.loads(ws.receive_text())
+        assert resp['type'] == 'booth:joined'
+
+
+def test_full_isolation_flow():
+    """End-to-end: two separate events share no state."""
+    # Create booths for two events with the same language
+    client.post('/api/events/fest1/booths', json={'language_code': 'en', 'language': 'English'})
+    client.post('/api/events/fest2/booths', json={'language_code': 'en', 'language': 'English'})
+
+    # Join fest1 booth
+    with client.websocket_connect('/ws/booth/fest1-en') as ws:
+        ws.send_text(json.dumps({
+            'type': 'booth:join', 'display_name': 'Alice',
+            'role': 'interpreter', 'language': 'English', 'channel_id': 'fest1/en',
+        }))
+        joined = json.loads(ws.receive_text())
+        if joined['type'] != 'booth:joined':
+            joined = json.loads(ws.receive_text())
+        ws.receive_text()  # state
+
+        # fest1 has 1 participant; fest2 has 0
+        state1 = client.get('/api/events/fest1/booths/en/state').json()
+        state2 = client.get('/api/events/fest2/booths/en/state').json()
+        assert len(state1['participants']) == 1
+        assert len(state2['participants']) == 0
+
+        # fest2 listing must not show fest1 booths
+        listing2 = client.get('/api/events/fest2/booths').json()
+        assert all(b['event_slug'] == 'fest2' for b in listing2['booths'])
+

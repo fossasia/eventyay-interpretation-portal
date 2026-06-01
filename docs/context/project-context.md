@@ -53,7 +53,8 @@ The current implementation covers:
 - Internal booth chat (WebSocket)
 - Coordinator handoff controls
 - Async in-memory booth state (server-side, FastAPI + native WebSocket)
-- HLS listener page with hls.js auto-recovery
+- WHEP WebRTC listener page (primary, sub-second latency)
+- HLS listener page with hls.js auto-recovery (fallback)
 
 **Not yet in scope (future phases):**
 
@@ -82,7 +83,10 @@ Eventyay core (Django app)
         └── MediaMTX (WHIP ingest → HLS output, Docker)
 ```
 
-The portal feeds language-specific HLS streams to the Eventyay viewer. It does not modify or replace the YouTube video path. Viewer-side synchronization is handled by a drift-correction loop in the Eventyay video module.
+The portal feeds language-specific audio streams to the Eventyay viewer via
+WHEP (WebRTC, primary) or HLS (fallback). It does not modify or replace the
+YouTube video path. Viewer-side synchronization is handled by a drift-correction
+loop in the Eventyay video module.
 
 ---
 

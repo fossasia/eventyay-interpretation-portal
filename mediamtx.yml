@@ -12,9 +12,10 @@
 logLevel: info           # debug | info | warn | error
 logDestinations: [stdout]
 
-# ── WebRTC / WHIP ingest ────────────────────────────────────────────────────
-# Browsers POST their SDP offer to http://host:8889/whip/{path} and receive
-# an SDP answer in return; RTP/Opus audio then flows browser → MediaMTX.
+# ── WebRTC / WHIP ingest + WHEP playback ────────────────────────────────────
+# WHIP (publish): browsers POST SDP offer to http://host:8889/{path}/whip
+# WHEP (read):    browsers POST SDP offer to http://host:8889/{path}/whep
+# Both use the same WebRTC server on port 8889.
 #
 # webrtcEncryption: disables DTLS-SRTP (per-packet media encryption), which is
 # required for local dev because self-signed DTLS certs are otherwise needed.
@@ -30,6 +31,9 @@ webrtcLocalUDPAddress: :8189  # single UDP port for all ICE traffic (replaces de
 # UDP port 8189.
 webrtcAdditionalHosts:
   - 127.0.0.1
+# Allow the browser JS on :8000 (FastAPI portal) to POST WHEP/WHIP offers
+# (cross-origin).  Plural form required by MediaMTX ≥ 1.18.
+webrtcAllowOrigins: ['*']
 
 # ── HLS output ──────────────────────────────────────────────────────────────
 # Playlists and segments are served at http://host:8888/{path}/index.m3u8.
@@ -45,8 +49,9 @@ webrtcAdditionalHosts:
 #                     until post-MVP per docs/detailedplan.md § 11.2.
 hlsAddress: :8888
 hlsEncryption: no
-# Allow the browser JS on :8000 (FastAPI portal) to fetch the HLS playlist for validation (cross-origin)
-hlsAllowOrigin: '*'
+# Allow the browser JS on :8000 (FastAPI portal) to fetch the HLS playlist for
+# validation (cross-origin).  Plural form required by MediaMTX ≥ 1.18.
+hlsAllowOrigins: ['*']
 hlsAlwaysRemux: yes
 # 1 s segments reduce the first-segment wait after interpreter switch to ~1 s
 # (down from 2 s) while still giving viewers 3 s of buffer (3 segments × 1 s).
@@ -54,17 +59,57 @@ hlsSegmentDuration: 1s
 hlsSegmentMaxSize: 50MB
 # hlsPartDuration: 200ms   # uncomment to enable LL-HLS (post-MVP)
 
+# ── Authentication ────────────────────────────────────────────────────────────
+# By default MediaMTX restricts api/metrics/pprof to 127.0.0.1 only.
+# Since Docker port-forwarding routes requests from the bridge IP (not
+# localhost), we need to allow API access from any IP for local dev.
+# Production: restrict ips to the FastAPI container's IP or network.
+authMethod: internal
+authInternalUsers:
+  # Allow any user to publish and read (same as default)
+  - user: any
+    pass:
+    ips: []
+    permissions:
+      - action: publish
+        path:
+      - action: read
+        path:
+      - action: playback
+        path:
+  # Allow API access from any IP (needed for Docker port-forwarding)
+  - user: any
+    pass:
+    ips: []
+    permissions:
+      - action: api
+
+# ── Control API ──────────────────────────────────────────────────────────────
+# Enables the REST API on port 9997.  FastAPI uses it to dynamically create
+# named paths with alwaysAvailable (which cannot be set on the wildcard
+# all_others path).  See POST /v3/config/paths/add/{name}.
+api: true
+apiAddress: :9997
+
 # ── Path defaults ────────────────────────────────────────────────────────────
-# Every path is auto-created on first WHIP publish — no static path config
-# needed.
+# Every path is auto-created on first WHIP/WHEP access via the all_others
+# wildcard.  Note: alwaysAvailable CANNOT be set in pathDefaults or on
+# all_others — MediaMTX rejects it with "cannot be used in a path with a
+# regular expression (or path 'all')".
+#
+# To get alwaysAvailable on specific booth paths, FastAPI creates named paths
+# via the Control API (POST /v3/config/paths/add/{channel_id}) on first access.
+# Named paths take precedence over all_others.
 #
 # overridePublisher: when a new WHIP publisher connects to a path that already
-# has one, MediaMTX kicks the old publisher and seamlessly continues the HLS
-# muxer with the new source. This is critical for relay handoff — the incoming
-# interpreter can connect IMMEDIATELY and the HLS stream never pauses.
-# Without this, the incoming gets 409 until the outgoing DELETEs, causing a
-# ~100-300 ms gap where the HLS muxer is torn down and viewers experience a
-# stall/pause.
+# has one, MediaMTX kicks the old publisher and accepts the new one.
+#
+# ENFORCEMENT LAYER 3 — Media-level single-publisher guarantee:
+# If a rogue or stale WHIP session bypasses the application-level checks
+# (Layer 1: booth_state role + active-interpreter validation, Layer 2:
+# /api/booth/{booth_id}/whip-url gated endpoint), MediaMTX itself ensures
+# only one publisher is live per path at any time. The old publisher is
+# disconnected immediately when a new one arrives.
 pathDefaults:
   record: no             # disable on-disk recording for local dev
   overridePublisher: yes

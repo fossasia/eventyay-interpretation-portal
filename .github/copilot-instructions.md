@@ -14,11 +14,11 @@ Canonical project policy is in [`../agents.md`](../agents.md). Read that first.
 
 A browser-first interpretation booth console for Eventyay live events.
 
-**Stack:** FastAPI (ASGI/uvicorn) + MediaMTX (WHIP/HLS) + self-hosted Jitsi Meet. No Flask, no Socket.IO, no aiortc.
+**Stack:** FastAPI (ASGI/uvicorn) + MediaMTX (WHIP/WHEP/HLS) + self-hosted Jitsi Meet. No Flask, no Socket.IO, no aiortc.
 
 - Interpreters monitor the floor session via an embedded Jitsi iframe (self-hosted)
-- Interpreters broadcast audio via browser WebRTC → WHIP → MediaMTX → HLS
-- Attendees listen via the `/listen/{booth_id}` page (hls.js with auto-recovery)
+- Interpreters broadcast audio via browser WebRTC → WHIP → MediaMTX
+- Attendees listen via `/listener-webrtc/{booth_id}` (WHEP WebRTC, primary) or `/listen/{booth_id}` (hls.js fallback)
 - Coordination (booth state, roles, chat) is via native WebSocket on FastAPI
 
 **Frontend:** Jinja2 templates + vanilla ES module JavaScript in `templates/` and `static/js/`. No Vue, no React, no build step. The `src/` directory has been removed.

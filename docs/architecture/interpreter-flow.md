@@ -1,6 +1,6 @@
 # Interpreter Audio Flow
 
-This document traces the complete audio path from the interpreter's microphone to the listener's HLS player.
+This document traces the complete audio path from the interpreter's microphone to the listener's WHEP/HLS player.
 
 ---
 
@@ -55,16 +55,22 @@ MediaStream (audio-only; never connected to AudioContext.destination)
        RTP stream (Opus codec) → MediaMTX
        │
        ▼
-       MediaMTX transcodes and segments to HLS
+       MediaMTX transcodes and segments to HLS (fallback)
+       MediaMTX serves WHEP for sub-second WebRTC playback (primary)
        │
+       │  Primary path:
+       ▼
+       WHEP available at MediaMTX :8889/{channel_id}/whep
+       │
+       ▼
+       WHEP Listener page /listener-webrtc/{booth_id}: WebRTC player (<1s latency)
+       │
+       │  Fallback path:
        ▼
        HLS available at MediaMTX :8888/{channel_id}/playlist.m3u8
        │
        ▼
-       Listener page /listen/{booth_id}: hls.js player with auto-recovery
-       │
-       ▼
-       Eventyay viewer: Hidden HLS audio player (drift-corrected against YouTube clock)
+       HLS Listener page /listen/{booth_id}: hls.js player with auto-recovery (~3s latency)
 ```
 
 ---
@@ -87,10 +93,10 @@ The mic test completes when the interpreter confirms they can see the level resp
 
 ### Step 3 — Ingest connection (Go Live)
 
-1. Creates a new `RTCPeerConnection` with configured STUN servers.
+4. Creates a new `RTCPeerConnection` with no STUN servers (skipped for local/LAN to eliminate ICE delay).
 2. Adds all audio tracks from the active `MediaStream`.
 3. Creates an offer with `offerToReceiveAudio: false, offerToReceiveVideo: false` (send-only).
-4. Sets the local description and waits for ICE gathering to complete (max 3 s).
+6. Sets the local description and waits for ICE gathering to complete (max 100 ms timeout).
 5. POSTs the SDP offer to the MediaMTX WHIP endpoint at `:8889/{channel_id}` with `Content-Type: application/sdp`.
 6. MediaMTX returns a `201 Created` response with the SDP answer in the body.
 7. Sets `peerConnection.setRemoteDescription(answer)` to complete the connection.
@@ -116,9 +122,10 @@ MediaMTX handles the entire audio pipeline. Python never touches audio data.
 ### WHIP session lifecycle
 
 - **Publish:** Browser POSTs SDP offer to `http://mediamtx:8889/{channel_id}` via WHIP protocol.
-- **Receive:** MediaMTX accepts the WebRTC session, receives Opus RTP, transcodes to HLS.
-- **HLS output:** Available at `http://mediamtx:8888/{channel_id}/playlist.m3u8`.
-- **Handoff:** `overridePublisher: yes` in MediaMTX config allows a new publisher to replace the current one on the same path without requiring explicit disconnection.
+- **Receive:** MediaMTX accepts the WebRTC session, receives Opus RTP, serves via WHEP and transcodes to HLS.
+- **WHEP output:** Available at `http://mediamtx:8889/{channel_id}/whep` (sub-second latency).
+- **HLS output:** Available at `http://mediamtx:8888/{channel_id}/playlist.m3u8` (fallback).
+- **Handoff:** `overridePublisher: yes` in MediaMTX config allows a new publisher to replace the current one. Paths are created with `alwaysAvailable: true` via the Control API (:9997) so WHEP listeners stay connected during handoff.
 
 ### Connection state monitoring
 

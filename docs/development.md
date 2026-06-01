@@ -57,7 +57,9 @@ Then open `http://127.0.0.1:8000/healthz`.
 - Default bind host is `127.0.0.1`, port `8000`.
 - Set `HOST=0.0.0.0` only when you intentionally need LAN access.
 - Booth state remains in memory in the current prototype.
-- HLS output is served by MediaMTX at `:8888` (not by the portal).
+- WHEP output is served by MediaMTX at `:8889` (primary listener path, sub-second latency).
+- HLS output is served by MediaMTX at `:8888` (fallback listener path, ~3 s latency).
+- MediaMTX Control API is at `:9997` (dynamic path management with `alwaysAvailable`).
 
 ## macOS notes
 

@@ -44,6 +44,9 @@
   <div id="status"><span class="status-badge waiting">Connecting...</span></div>
   <audio id="audio-player" controls autoplay></audio>
   <div id="stream-log"></div>
+  <div style="margin-top:0.5rem; font-size:0.82rem; color:#666;">
+    <a href="/listener-webrtc/{{ booth_id }}?language={{ language }}&channel={{ channel_id }}" style="color:#0066cc;">Switch to WebRTC listener (low-latency)</a>
+  </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js"></script>
