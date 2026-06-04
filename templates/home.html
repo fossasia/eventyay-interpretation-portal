@@ -3,13 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Eventyay Interpretation Portal</title>
+    <title>Voxbento Interpretation Portal</title>
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', path='favicon.ico') }}" />
     <link rel="stylesheet" href="{{ url_for('static', path='css/admin.css') }}" />
   </head>
   <body>
     <header class="portal-home-header">
-      <a class="brand" href="/">Eventyay</a>
+      <a class="brand" href="/">Voxbento</a>
       <nav class="header-nav">
         {% if current_user %}
         <a href="/account">My Account</a>
@@ -144,7 +144,7 @@
     </main>
 
     <footer class="admin-footer">
-      <span>Eventyay Interpretation Portal — Powered by FastAPI + MediaMTX</span>
+      <span>Voxbento Interpretation Portal — Powered by FastAPI + MediaMTX</span>
     </footer>
   </body>
 </html>
