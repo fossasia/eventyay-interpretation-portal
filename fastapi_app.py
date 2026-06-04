@@ -976,6 +976,9 @@ async def account_page(request: Request):
 
 @app.get('/admin/login')
 async def admin_login_page(request: Request):
+    user = await get_current_user(request)
+    if user and user.get('is_admin'):
+        return RedirectResponse(url='/admin/', status_code=status.HTTP_303_SEE_OTHER)
     return templates.TemplateResponse(request, 'admin/login.html', {})
 
 

@@ -432,7 +432,7 @@ function setPreflightStatus(check, status, message = '') {
 
 async function validateHlsOutput() {
   if (!state.hlsBase || !state.channelId) return false
-  const url = `${state.hlsBase}/${encodeURIComponent(state.channelId)}/index.m3u8`
+  const url = `${state.hlsBase}/${state.channelId}/index.m3u8`
   try {
     const response = await fetch(url, { cache: 'no-store' })
     if (!response.ok) return false
@@ -1161,8 +1161,8 @@ function renderMicControls() {
   elements.passRelay.disabled = !joinedActiveInterpreter
   elements.micDeviceSelect.disabled = state.ingestConnected
 
-  if (state.ingestConnected && state.hlsBase) {
-    const url = `${state.hlsBase}/${encodeURIComponent(state.channelId)}/index.m3u8`
+  if (state.ingestConnected && state.boothId) {
+    const url = `${window.location.origin}/listener-webrtc/${encodeURIComponent(state.boothId)}`
     elements.hlsUrlDisplay.textContent = url
     elements.hlsUrlRow.classList.remove('hidden')
   } else {
