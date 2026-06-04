@@ -280,7 +280,7 @@ async def join_via_invite(token: str) -> RedirectResponse:
 
 @app.get('/')
 async def home(request: Request):
-    from portal.database import get_session, list_events, list_booths_for_event, list_booth_memberships_for_user
+    from portal.database import get_session, list_events, list_booths_for_event, list_booth_memberships_for_user, list_memberships_for_user
 
     current_user = await get_current_user(request)
     my_booths = []
@@ -340,7 +340,9 @@ async def home(request: Request):
                     'booths': booth_statuses,
                     'live_count': sum(1 for bs in booth_statuses if bs['is_live']),
                 })
-    except Exception:
+    except Exception as _exc:
+        import logging
+        logging.getLogger(__name__).warning('home() DB error: %s', _exc, exc_info=True)
         event_data = []
 
     return templates.TemplateResponse(request, 'home.html', {
@@ -381,19 +383,25 @@ async def interpreter_booth_by_identity(
 
     granted_role = resolve_booth_role(payload)
 
+    # is_admin flag in JWT always grants event_admin — no DB lookup needed.
+    if granted_role is None and payload.get('is_admin'):
+        granted_role = 'event_admin'
+
     # If role is still None the user is registered but has no role claim in the JWT.
     # Check BoothMembership from the DB for this exact booth first,
-    # then fallback to EventMembership (for coordinators/admins).
+    # then fallback to EventMembership (for coordinators/event_admins).
     if granted_role is None and payload.get('sub'):
         from portal.database import get_session, list_memberships_for_user, list_booth_memberships_for_user
         try:
             async with get_session() as db_session:
+                # 1. Booth-level membership (e.g. interpreter assigned to this specific booth)
                 bms = await list_booth_memberships_for_user(db_session, int(payload['sub']))
                 for bm in bms:
                     if bm.booth.event.slug == event_slug and bm.booth.language_code == language_code:
                         granted_role = bm.role
                         break
-                
+
+                # 2. Event-level membership (coordinator, event_admin assigned to the event)
                 if granted_role is None:
                     memberships = await list_memberships_for_user(db_session, int(payload['sub']))
                     for m in memberships:
@@ -1585,19 +1593,38 @@ async def ws_booth(websocket: WebSocket, booth_id: str) -> None:
 
     ws_granted_role = resolve_booth_role(ws_session_payload)
 
+    # is_admin in JWT always grants event_admin at the WS level too.
+    if ws_granted_role is None and ws_session_payload is not None and ws_session_payload.get('is_admin'):
+        ws_granted_role = 'event_admin'
+
     # For registered users whose token carries no 'role' claim, fall back to
-    # EventMembership in the DB — the same logic the HTTP booth page uses.
+    # BoothMembership then EventMembership in the DB.
     if ws_granted_role is None and ws_session_payload is not None and ws_session_payload.get('sub'):
         try:
             from portal.booth_identity import parse_booth_id as _parse_booth_id
-            from portal.database import get_session as _get_session, list_memberships_for_user as _list_memberships
-            _event_slug, _ = _parse_booth_id(booth_id)
+            from portal.database import (
+                get_session as _get_session,
+                list_memberships_for_user as _list_memberships,
+                list_booth_memberships_for_user as _list_booth_memberships,
+            )
+            _event_slug, _lang_code = _parse_booth_id(booth_id)
             async with _get_session() as _db:
-                _memberships = await _list_memberships(_db, int(ws_session_payload['sub']))
-                for _m in _memberships:
-                    if _m.event and _m.event.slug == _event_slug:
-                        ws_granted_role = _m.role
+                # 1. Booth-level membership first (interpreter for specific booth)
+                _booth_mems = await _list_booth_memberships(_db, int(ws_session_payload['sub']))
+                for _bm in _booth_mems:
+                    if (
+                        _bm.booth.event.slug == _event_slug
+                        and _bm.booth.language_code == _lang_code
+                    ):
+                        ws_granted_role = _bm.role
                         break
+                # 2. Event-level membership (coordinator, event_admin)
+                if ws_granted_role is None:
+                    _memberships = await _list_memberships(_db, int(ws_session_payload['sub']))
+                    for _m in _memberships:
+                        if _m.event and _m.event.slug == _event_slug:
+                            ws_granted_role = _m.role
+                            break
         except Exception:
             pass
 

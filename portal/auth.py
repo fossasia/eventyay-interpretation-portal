@@ -175,11 +175,17 @@ _ROLE_RANK: dict[str, int] = {
 
 
 def get_booth_session(request: Request) -> dict | None:
-    """Return decoded JWT payload from either session_token (invite) or user_token (registered user).
+    """Return decoded JWT payload from either user_token (registered user) or session_token (invite link).
+
+    Registered-user tokens (user_token) are checked FIRST so that a logged-in
+    admin or event_admin is never shadowed by an older invite-link session_token
+    cookie that may carry a lower role (e.g. 'interpreter').
 
     Returns None if neither cookie exists or both are invalid.
     """
-    for cookie_name in ('session_token', 'user_token'):
+    # Prefer user_token (registered user with is_admin / event roles) over
+    # session_token (one-time invite link with a fixed role claim).
+    for cookie_name in ('user_token', 'session_token'):
         cookie = request.cookies.get(cookie_name, '')
         if not cookie:
             continue

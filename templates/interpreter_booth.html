@@ -34,23 +34,34 @@
         Role
         {% set gr = granted_role | default("") %}
         <select id='participant-role' class='input'{% if gr %} disabled{% endif %}>
-          {% if gr == 'interpreter' or gr in ('coordinator', 'event_admin', 'super_admin') %}
-            <option value='interpreter'{% if gr == 'interpreter' %} selected{% endif %}>Interpreter</option>
-          {% endif %}
-          {% if gr in ('coordinator', 'event_admin', 'super_admin') %}
-            <option value='coordinator'{% if gr == 'coordinator' %} selected{% endif %}>Coordinator</option>
-          {% endif %}
-          {% if gr %}
-            <option value='listener'{% if gr == 'listener' %} selected{% endif %}>Listener</option>
-          {% else %}
+          {% if not gr %}
+            {# No assigned role — show all options freely #}
             <option value='interpreter'>Interpreter</option>
             <option value='coordinator'>Coordinator</option>
+            <option value='listener'>Listener</option>
+          {% elif gr == 'listener' %}
+            <option value='listener' selected>Listener</option>
+          {% elif gr == 'interpreter' %}
+            <option value='interpreter' selected>Interpreter</option>
+          {% elif gr in ('coordinator', 'event_admin', 'super_admin') %}
+            {# Coordinators and admins can join as coordinator or interpreter #}
+            <option value='coordinator'{% if gr == 'coordinator' %} selected{% endif %}>Coordinator</option>
+            <option value='interpreter'>Interpreter</option>
             <option value='listener'>Listener</option>
           {% endif %}
         </select>
         {% if gr %}
           <input type='hidden' id='participant-role-hidden' value='{{ gr }}' />
-          <small class='hint'>Role assigned: <strong>{{ gr }}</strong></small>
+          <small class='hint'>
+            Role: <strong>{{ gr }}</strong>
+            {% if gr in ('event_admin', 'super_admin') %}
+              — you have full access to this booth
+            {% elif gr == 'coordinator' %}
+              — you can assign the active interpreter
+            {% elif gr == 'interpreter' %}
+              — you can go live when active
+            {% endif %}
+          </small>
         {% endif %}
       </label>
       <label>

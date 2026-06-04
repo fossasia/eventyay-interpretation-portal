@@ -581,9 +581,11 @@ function joinBooth() {
   state.language = elements.language.value.trim() || state.language
   state.channelId = elements.channel.value.trim() || state.channelId
 
-  // Use the granted_role from the server if available; otherwise fall back to
-  // whatever the (potentially disabled) role select shows.
-  const requestedRole = state.grantedRole || elements.role.value
+  // The select value is the BOOTH role the user wants to join as.
+  // For roles like event_admin/super_admin, the select offers coordinator
+  // as default so admins don't accidentally take an interpreter slot.
+  // state.grantedRole is only used as fallback if the select has no value.
+  const requestedRole = elements.role.value || state.grantedRole || 'interpreter'
 
   wsSend({
     type: 'booth:join',
@@ -592,6 +594,7 @@ function joinBooth() {
     language: state.language,
     channel_id: state.channelId,
     participant_id: state.participantId,
+    event_slug: portal.dataset.eventSlug || '',
   })
 }
 
