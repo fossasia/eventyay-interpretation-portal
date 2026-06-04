@@ -43,7 +43,6 @@ const elements = {
   monitorStatus: document.getElementById('monitor-status'),
   activeIndicator: document.getElementById('active-indicator'),
   ingestStatus: document.getElementById('ingest-status'),
-  activeName: document.getElementById('active-name'),
   micState: document.getElementById('mic-state'),
   ingestReachable: document.getElementById('ingest-reachable'),
   errorBanner: document.getElementById('error-banner'),
@@ -99,6 +98,11 @@ boot().catch((error) => {
 })
 
 async function boot() {
+  // Start preflight checks immediately so they run in parallel with initialization
+  runPreflightChecks().catch((error) => {
+    showError(`Preflight checks failed: ${error.message}`)
+  })
+
   // Jitsi URL is set by the template — don't overwrite it
   await fetchBoothState()
   await fetchIngestReachability()
@@ -107,9 +111,6 @@ async function boot() {
   await connectWebSocket()
   bindEventHandlers()
   render()
-  runPreflightChecks().catch((error) => {
-    showError(`Preflight checks failed: ${error.message}`)
-  })
 }
 
 // ── JWT and WebSocket lifecycle ───────────────────────────────────────────────
@@ -1045,7 +1046,6 @@ function renderParticipants() {
     activeParticipant ? `${activeParticipant.display_name} is active` : 'No active interpreter',
     activeParticipant ? 'success' : 'warning',
   )
-  elements.activeName.textContent = activeParticipant ? activeParticipant.display_name : 'Unassigned'
   elements.participantList.innerHTML = ''
   for (const participant of state.participants) {
     const tile = document.createElement('article')
