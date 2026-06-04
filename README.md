@@ -1,6 +1,7 @@
 # Voxbento
 
-Real-time interpretation coordination for  events.
+Voxbento is a real-time interpretation platform for live events. It provides a browser-first, zero-install experience for simultaneous interpreters, allowing them to monitor the main floor video via Jitsi and broadcast translated audio to attendees with low latency.
+
 Interpreters stream live audio via WebRTC/WHIP → MediaMTX → WHEP (WebRTC playback).
 Booth coordination (who is active, relay handoff, chat) runs over WebSocket.
 
@@ -10,6 +11,7 @@ Booth coordination (who is active, relay handoff, chat) runs over WebSocket.
 
 ```
 Interpreter browser
+  │  iframe → Jitsi Meet (Monitor conference floor video/audio)
   │  mic → RTCPeerConnection → WHIP POST
   ▼
 MediaMTX :8889 (WHIP ingest + WHEP)   Python is never in the audio path
