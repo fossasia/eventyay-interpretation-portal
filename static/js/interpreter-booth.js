@@ -94,13 +94,15 @@ const HLS_POLL_INTERVAL_MS = 1000
 const HLS_POLL_MAX_ATTEMPTS = 10
 
 boot().catch((error) => {
-  showError(`Failed to boot interpreter portal: ${error.message}`)
+  const msg = error instanceof Error ? error.message : String(error)
+  showError(`Failed to boot interpreter portal: ${msg}`)
 })
 
 async function boot() {
   // Start preflight checks immediately so they run in parallel with initialization
   runPreflightChecks().catch((error) => {
-    showError(`Preflight checks failed: ${error.message}`)
+    const msg = error instanceof Error ? error.message : String(error)
+    showError(`Preflight checks failed: ${msg}`)
   })
 
   // Jitsi URL is set by the template — don't overwrite it

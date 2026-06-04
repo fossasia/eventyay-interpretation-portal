@@ -381,35 +381,8 @@ async def interpreter_booth_by_identity(
             status_code=status.HTTP_303_SEE_OTHER,
         )
 
-    granted_role = resolve_booth_role(payload)
-
-    # If role is still None the user is registered but has no role claim in the JWT.
-    # Check BoothMembership from the DB for this exact booth first,
-    # then fallback to EventMembership (for coordinators/event_admins).
-    if granted_role is None and payload.get('sub'):
-        from portal.database import get_session, list_memberships_for_user, list_booth_memberships_for_user
-        try:
-            async with get_session() as db_session:
-                # 1. Booth-level membership (e.g. interpreter assigned to this specific booth)
-                bms = await list_booth_memberships_for_user(db_session, int(payload['sub']))
-                for bm in bms:
-                    if bm.booth.event.slug == event_slug and bm.booth.language_code == language_code:
-                        granted_role = bm.role
-                        break
-
-                # 2. Event-level membership (coordinator, event_admin assigned to the event)
-                if granted_role is None:
-                    memberships = await list_memberships_for_user(db_session, int(payload['sub']))
-                    for m in memberships:
-                        if m.event and m.event.slug == event_slug:
-                            granted_role = m.role
-                            break
-        except Exception:
-            pass
-
-    # is_admin flag in JWT grants event_admin if no specific role is assigned.
-    if granted_role is None and payload.get('is_admin'):
-        granted_role = 'event_admin'
+    booth_id = make_booth_id(event_slug, language_code)
+    granted_role = await resolve_booth_role(payload, booth_id)
 
     if granted_role is None:
         # User is authenticated but has no role for this event
@@ -467,7 +440,7 @@ async def interpreter_booth(
             status_code=status.HTTP_303_SEE_OTHER,
         )
 
-    granted_role = resolve_booth_role(payload)
+    granted_role = await resolve_booth_role(payload, booth_id)
     if granted_role is None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -1594,42 +1567,7 @@ async def ws_booth(websocket: WebSocket, booth_id: str) -> None:
         except Exception:
             continue
 
-    ws_granted_role = resolve_booth_role(ws_session_payload)
-
-    # For registered users whose token carries no 'role' claim, fall back to
-    # BoothMembership then EventMembership in the DB.
-    if ws_granted_role is None and ws_session_payload is not None and ws_session_payload.get('sub'):
-        try:
-            from portal.booth_identity import parse_booth_id as _parse_booth_id
-            from portal.database import (
-                get_session as _get_session,
-                list_memberships_for_user as _list_memberships,
-                list_booth_memberships_for_user as _list_booth_memberships,
-            )
-            _event_slug, _lang_code = _parse_booth_id(booth_id)
-            async with _get_session() as _db:
-                # 1. Booth-level membership first (interpreter for specific booth)
-                _booth_mems = await _list_booth_memberships(_db, int(ws_session_payload['sub']))
-                for _bm in _booth_mems:
-                    if (
-                        _bm.booth.event.slug == _event_slug
-                        and _bm.booth.language_code == _lang_code
-                    ):
-                        ws_granted_role = _bm.role
-                        break
-                # 2. Event-level membership (coordinator, event_admin)
-                if ws_granted_role is None:
-                    _memberships = await _list_memberships(_db, int(ws_session_payload['sub']))
-                    for _m in _memberships:
-                        if _m.event and _m.event.slug == _event_slug:
-                            ws_granted_role = _m.role
-                            break
-        except Exception:
-            pass
-
-    # is_admin in JWT grants event_admin at the WS level if no specific role is assigned.
-    if ws_granted_role is None and ws_session_payload is not None and ws_session_payload.get('is_admin'):
-        ws_granted_role = 'event_admin'
+    ws_granted_role = await resolve_booth_role(ws_session_payload, booth_id)
 
     # Validate invite/participant token scope: the token's (event_slug, language_code)
     # must match the booth being connected to.  This prevents a valid token for booth A
