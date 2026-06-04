@@ -248,8 +248,8 @@ async def resolve_booth_role(payload: dict | None, booth_id: str | None = None) 
         except ValueError:
             # booth_id is likely a legacy format (e.g., 'demo-booth') that cannot be parsed
             pass
-        except Exception as e:
-            logger.error("Failed to resolve booth role from database: %s", e)
+        except Exception:
+            logger.exception("Failed to resolve booth role from database")
 
     # 3. Global admin fallback
     if granted_role is None and payload.get('is_admin'):
