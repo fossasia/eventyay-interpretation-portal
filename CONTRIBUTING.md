@@ -49,7 +49,7 @@ All 27 tests must pass before opening a PR. The same checks run in CI
 
 ## Architecture constraints
 
-- **Python is never in the audio path.** Audio flows: browser mic → WHIP → MediaMTX → WHEP/HLS → attendee. Do not add aiortc or similar.
+- **Python is never in the audio path.** Audio flows: browser mic → WHIP → MediaMTX → WHEP → attendee. Do not add aiortc or similar.
 - **No Flask, no Socket.IO.** FastAPI + native WebSocket is the sole backend.
 - **Two data stores.** Real-time booth state lives in `BoothRegistry` (in-memory). Persistent admin entities (events, rooms, booths, tokens) live in SQLAlchemy models with Alembic migrations. See `portal/models.py` and `portal/database.py`.
 - **Booth fields are immutable after creation.** `language` and `channel_id` on a `Booth` object are set on first join and not overwritten.
@@ -85,10 +85,10 @@ git add alembic/versions/*.py
 The seamless interpreter-switch relies on the silence-mode handoff in
 `static/js/interpreter-booth.js → applyBoothState`. If you change timing
 constants (`700 ms` outgoing silence window, `200 ms` retry interval), test with
-a real MediaMTX instance to verify WHEP and HLS continuity.
+a real MediaMTX instance to verify WHEP continuity.
 
 WHEP listeners recover in ~1.5–3 s (RTCPeerConnection stays open via
-`alwaysAvailable` paths). HLS fallback listeners take ~10–15 s to recover.
+`alwaysAvailable` paths).
 
 ## Dependency management
 
