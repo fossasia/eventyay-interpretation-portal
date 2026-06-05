@@ -18,12 +18,14 @@ client = TestClient(app)
 
 
 @pytest.fixture(autouse=True)
-async def setup_db():
+def setup_db():
     from portal.database import configure, dispose, init_db
+    import anyio
+    
     configure('sqlite+aiosqlite://')
-    await init_db()
+    anyio.run(init_db)
     yield
-    await dispose()
+    anyio.run(dispose)
 
 def _interpreter_cookie(event_slug: str = 'test-event', language_code: str = 'en') -> dict:
     """Return a cookies dict with a valid interpreter session_token."""
