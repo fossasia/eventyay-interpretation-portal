@@ -236,6 +236,12 @@ label {
   box-shadow: 0 0 0 0.2rem rgb(33 133 208 / 18%);
 }
 
+.input[readonly] {
+  background: var(--color-surface, #f5f5f5);
+  color: var(--color-muted, #666);
+  cursor: default;
+}
+
 .btn {
   border: 1px solid var(--color-border);
   background: #fff;

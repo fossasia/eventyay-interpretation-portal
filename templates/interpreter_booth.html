@@ -105,7 +105,7 @@
         </summary>
         <div class='panel-body setup-sidebar'>
           <div class='setup-grid'>
-            <label>Name <input id='display-name' type='text' class='input input-sm' placeholder='Interpreter' /></label>
+            <label>Name <input id='display-name' type='text' class='input input-sm' placeholder='Interpreter' value='{{ display_name | default("") }}' /></label>
             <label>
               Role
               {% set gr = granted_role | default("") %}
@@ -128,8 +128,8 @@
                 <input type='hidden' id='participant-role-hidden' value='{{ gr }}' />
               {% endif %}
             </label>
-            <label>Language <input id='booth-language' type='text' class='input input-sm' value='{{ booth_language }}' /></label>
-            <label>Channel <input id='booth-channel' type='text' class='input input-sm' value='{{ booth_channel_id }}' /></label>
+            <label>Language <input id='booth-language' type='text' class='input input-sm' value='{{ booth_language }}' readonly /></label>
+            <label>Channel <input id='booth-channel' type='text' class='input input-sm' value='{{ booth_channel_id }}' readonly /></label>
           </div>
           <button id='join-booth' type='button' class='btn btn-primary btn-sm' style='margin-top: 0.8rem; width: 100%'>Join Booth</button>
         </div>
