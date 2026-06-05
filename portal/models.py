@@ -88,10 +88,12 @@ class Room(Base):
     display_name: Mapped[str] = mapped_column(String(200))
     eventyay_room_id: Mapped[str | None] = mapped_column(String(200), nullable=True, default=None)
     jitsi_url: Mapped[str | None] = mapped_column(String(500), nullable=True, default=None)
+    relay_booth_id: Mapped[int | None] = mapped_column(ForeignKey('booths.id', ondelete='SET NULL'), nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
     event: Mapped[Event] = relationship(back_populates='rooms')
-    booths: Mapped[list[DBBooth]] = relationship(back_populates='room', cascade='all, delete-orphan')
+    booths: Mapped[list['DBBooth']] = relationship(back_populates='room', cascade='all, delete-orphan', foreign_keys='DBBooth.room_id')
+    relay_booth: Mapped['DBBooth'] = relationship('DBBooth', foreign_keys=[relay_booth_id])
 
     def __repr__(self) -> str:
         return f'<Room id={self.id} name={self.display_name!r}>'
@@ -121,7 +123,7 @@ class DBBooth(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
     event: Mapped[Event] = relationship(back_populates='booths')
-    room: Mapped[Room] = relationship(back_populates='booths')
+    room: Mapped[Room] = relationship(back_populates='booths', foreign_keys=[room_id])
     invite_tokens: Mapped[list[InviteToken]] = relationship(
         back_populates='booth', cascade='all, delete-orphan',
     )

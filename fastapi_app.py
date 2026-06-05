@@ -422,8 +422,18 @@ async def interpreter_booth_by_identity(
             .where(DBBooth.language_code == language_code)
         )
         db_booth = (await session.scalars(stmt)).first()
-        if db_booth and db_booth.room and db_booth.room.jitsi_url:
-            room_jitsi_url = db_booth.room.jitsi_url
+        relay_whep_url = None
+        relay_language_name = None
+        if db_booth and db_booth.room:
+            if db_booth.room.jitsi_url:
+                room_jitsi_url = db_booth.room.jitsi_url
+            if db_booth.room.relay_booth_id:
+                from portal.database import get_booth_by_id
+                relay_b = await get_booth_by_id(session, db_booth.room.relay_booth_id)
+                if relay_b:
+                    relay_channel = make_mediamtx_path(event_slug, relay_b.language_code)
+                    relay_whep_url = f'{settings.mediamtx_whip_base}/{relay_channel}/whep'
+                    relay_language_name = relay_b.language_name
 
     default_jitsi_url = _make_jitsi_url(
         settings.effective_jitsi_base_url, settings.default_jitsi_room
@@ -443,6 +453,8 @@ async def interpreter_booth_by_identity(
             'language_code': language_code,
             'whip_url': whip_url,
             'whep_url': whep_url,
+            'relay_whep_url': relay_whep_url,
+            'relay_language_name': relay_language_name,
             'granted_role': granted_role,
             'display_name': display_name,
             'default_jitsi_room': settings.default_jitsi_room,
@@ -1184,11 +1196,14 @@ async def admin_edit_room(request: Request, event_id: int, room_id: int):
     from portal.database import get_session, get_room_by_id
     form = await request.form()
     jitsi_url = form.get('jitsi_url', '').strip()
+    relay_booth_id_str = form.get('relay_booth_id', '').strip()
+    relay_booth_id = int(relay_booth_id_str) if relay_booth_id_str and relay_booth_id_str.lower() != 'none' else None
     
     async with get_session() as session:
         room = await get_room_by_id(session, room_id)
         if room and room.event_id == event_id:
             room.jitsi_url = jitsi_url if jitsi_url else None
+            room.relay_booth_id = relay_booth_id
             await session.commit()
             
     return safe_redirect(

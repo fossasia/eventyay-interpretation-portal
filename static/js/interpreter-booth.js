@@ -27,7 +27,7 @@ const state = {
   defaultJitsiRoom: portal.dataset.defaultJitsi || '',
   jitsiDomain: portal.dataset.jitsiDomain || '',
   whipBase: portal.dataset.whipBase || '',
-  whipBase: portal.dataset.whipBase || '',
+  relayWhepUrl: portal.dataset.relayWhepUrl || '',
   micDeviceId: localStorage.getItem('mic-device-id') || '',
   /** Role granted by the server (from JWT). Empty string = unknown / legacy. */
   grantedRole: portal.dataset.grantedRole || '',
@@ -57,6 +57,11 @@ const elements = {
   toggleMic: document.getElementById('toggle-mic'),
   goLive: document.getElementById('go-live'),
   passRelay: document.getElementById('pass-relay'),
+  relayAudio: document.getElementById('relay-audio'),
+  relayDeviceSelect: document.getElementById('relay-device-select'),
+  showVirtualRelayDevices: document.getElementById('show-virtual-relay-devices'),
+  relayVolume: document.getElementById('relay-volume'),
+  relayStatus: document.getElementById('relay-status'),
   micDeviceSelect: document.getElementById('mic-device-select'),
   showVirtualDevices: document.getElementById('show-virtual-devices'),
   micMeter: document.getElementById('mic-meter'),
@@ -90,6 +95,9 @@ async function boot() {
   await fetchBoothState()
   await fetchIngestReachability()
   await populateMicDevices()
+  if (state.relayWhepUrl) {
+    await populateRelayDevices()
+  }
 
   // Run preflights asynchronously before blocking on JWT/WS connection
   runPreflightChecks().catch((error) => {
@@ -256,9 +264,33 @@ function bindEventHandlers() {
     await startLiveIngest()
   })
 
-  elements.passRelay.addEventListener('click', () => {
-    passRelayToNextInterpreter()
-  })
+
+
+  if (elements.passRelay) {
+    elements.passRelay.addEventListener('click', toggleRelayAudio)
+  }
+
+  if (elements.relayDeviceSelect && elements.relayAudio) {
+    elements.relayDeviceSelect.addEventListener('change', async () => {
+      try {
+        if (typeof elements.relayAudio.setSinkId === 'function') {
+          await elements.relayAudio.setSinkId(elements.relayDeviceSelect.value)
+        }
+      } catch (e) {
+        console.warn('setSinkId failed', e)
+      }
+    })
+  }
+
+  if (elements.showVirtualRelayDevices) {
+    elements.showVirtualRelayDevices.addEventListener('change', populateRelayDevices)
+  }
+
+  if (elements.relayVolume && elements.relayAudio) {
+    elements.relayVolume.addEventListener('input', () => {
+      elements.relayAudio.volume = parseFloat(elements.relayVolume.value)
+    })
+  }
 
   elements.micDeviceSelect.addEventListener('change', () => {
     state.micDeviceId = elements.micDeviceSelect.value
@@ -586,6 +618,95 @@ async function populateMicDevices() {
   }
 }
 
+async function populateRelayDevices() {
+  if (!navigator.mediaDevices || !elements.relayDeviceSelect) return
+  let devices = []
+  try {
+    devices = await navigator.mediaDevices.enumerateDevices()
+  } catch {
+    return
+  }
+  let audioOutputs = devices.filter((d) => d.kind === 'audiooutput')
+
+  const includeVirtual = elements.showVirtualRelayDevices && elements.showVirtualRelayDevices.checked
+  if (!includeVirtual) {
+    const virtualKeywords = ['zoom', 'teams', 'nomachine', 'blackhole', 'loopback', 'soundflower', 'obs', 'virtual', 'webex', 'eqmac', 'epoccam']
+    audioOutputs = audioOutputs.filter((d) => {
+      const lower = d.label.toLowerCase()
+      return !virtualKeywords.some((keyword) => lower.includes(keyword))
+    })
+  }
+
+  const previous = elements.relayDeviceSelect.value
+  elements.relayDeviceSelect.innerHTML = ''
+
+  const defaultOpt = document.createElement('option')
+  defaultOpt.value = ''
+  defaultOpt.textContent = 'Default output'
+  elements.relayDeviceSelect.appendChild(defaultOpt)
+
+  for (const device of audioOutputs) {
+    const opt = document.createElement('option')
+    opt.value = device.deviceId
+    opt.textContent = device.label || `Speaker ${elements.relayDeviceSelect.options.length}`
+    elements.relayDeviceSelect.appendChild(opt)
+  }
+
+  if (previous && elements.relayDeviceSelect.querySelector(`option[value="${CSS.escape(previous)}"]`)) {
+    elements.relayDeviceSelect.value = previous
+  }
+}
+
+// ── Relay Listening ───────────────────────────────────────────────────────────
+
+let relayListening = false
+let relayDefaultText = ''
+
+function toggleRelayAudio() {
+  if (!state.relayWhepUrl) return
+  
+  if (!relayDefaultText && elements.passRelay) {
+    relayDefaultText = elements.passRelay.textContent.trim()
+  }
+
+  relayListening = !relayListening
+  if (relayListening) {
+    if (elements.passRelay) {
+      elements.passRelay.classList.add('btn-primary')
+      elements.passRelay.textContent = 'Stop Listening to Relay'
+    }
+    if (elements.relayStatus) elements.relayStatus.textContent = 'Connecting...'
+    WhepListener.start({
+      whepUrl: state.relayWhepUrl,
+      audioEl: elements.relayAudio,
+      onState: (st) => {
+        if (!elements.relayStatus) return
+        if (st.audioActive) {
+          elements.relayStatus.textContent = 'Listening'
+          elements.relayStatus.className = 'status-badge status-live'
+        } else if (st.peerConnection === 'failed') {
+          elements.relayStatus.textContent = 'Error'
+          elements.relayStatus.className = 'status-badge status-disconnected'
+        } else {
+          elements.relayStatus.textContent = 'Connecting...'
+          elements.relayStatus.className = 'status-badge status-warning'
+        }
+      },
+      onLog: (msg) => console.log('[Relay WHEP]', msg)
+    })
+  } else {
+    if (elements.passRelay) {
+      elements.passRelay.classList.remove('btn-primary')
+      elements.passRelay.textContent = relayDefaultText
+    }
+    if (elements.relayStatus) {
+      elements.relayStatus.textContent = 'Not Listening'
+      elements.relayStatus.className = 'status-badge'
+    }
+    WhepListener.stop()
+  }
+}
+
 // ── Microphone management ─────────────────────────────────────────────────────
 
 async function ensureMicStream() {
@@ -895,20 +1016,7 @@ function attemptRelayStart(attempt) {
   }, attempt === 0 ? 0 : _RELAY_RETRY_INTERVAL_MS)
 }
 
-function passRelayToNextInterpreter() {
-  if (!state.joined || !state.participantId) return
-  const interpreters = state.participants.filter((p) => p.role === 'interpreter')
-  if (interpreters.length < 2) {
-    showError('At least two interpreters are required for relay handoff.')
-    return
-  }
-  const currentIndex = interpreters.findIndex((p) => p.participant_id === state.activeInterpreterId)
-  const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % interpreters.length : 0
-  wsSend({
-    type: 'booth:set-active',
-    target_id: interpreters[nextIndex].participant_id,
-  })
-}
+
 
 function sendChatMessage() {
   const body = elements.chatInput.value.trim()

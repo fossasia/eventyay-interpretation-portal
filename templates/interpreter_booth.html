@@ -20,6 +20,7 @@
   data-whep-url='{{ whep_url | default("") }}'
   data-granted-role='{{ granted_role | default("") }}'
   data-display-name='{{ display_name | default("") }}'
+  data-relay-whep-url='{{ relay_whep_url | default("") }}'
 >
   <!-- ── Main 2-Column Grid ────────────────────────────────────────────── -->
   <div class='booth-columns'>
@@ -49,11 +50,7 @@
               <svg class='ctrl-icon' viewBox='0 0 24 24' fill='currentColor' aria-hidden='true'><path d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z'/></svg>
               <span class='ctrl-label' id='live-label'>GO LIVE</span>
             </button>
-            <!-- Relay -->
-            <button id='pass-relay' type='button' class='ctrl-btn' title='Pass relay to next interpreter' aria-label='Pass relay'>
-              <svg class='ctrl-icon' viewBox='0 0 24 24' fill='currentColor' aria-hidden='true'><path d='M6.99 11 3 15l3.99 4v-3H14v-2H6.99v-3zM21 9l-3.99-4v3H10v2h7.01v3L21 9z'/></svg>
-              <span class='ctrl-label'>RELAY</span>
-            </button>
+
             <!-- Join / Leave -->
             <button id='join-leave-btn' type='button' class='ctrl-btn ctrl-btn--primary' title='Join booth' aria-label='Join booth'>
               <svg class='ctrl-icon' viewBox='0 0 24 24' fill='currentColor' aria-hidden='true'><path d='M10.09 15.59L11.5 17l5-5-5-5-1.41 1.41L12.67 11H3v2h9.67l-2.58 2.59zM19 3H5c-1.11 0-2 .9-2 2v4h2V5h14v14H5v-4H3v4c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z'/></svg>
@@ -79,7 +76,7 @@
     <div class='booth-sidebar-col sidebar-scrollable'>
       
       <!-- Participants (Collapsible, Open by default) -->
-      <details class='panel panel-details' open>
+      <details class='panel panel-details'>
         <summary class='panel-header panel-header-details'>
           <h2>Participants</h2>
           <div style="display: flex; gap: 0.5rem; align-items: center;">
@@ -93,7 +90,7 @@
       </details>
 
       <!-- Chat (Collapsible, Open by default) -->
-      <details class='panel panel-details' open>
+      <details class='panel panel-details'>
         <summary class='panel-header panel-header-details'>
           <h2>Booth Chat</h2>
           <span class='status-badge'>Internal</span>
@@ -104,6 +101,43 @@
             <input id='chat-input' class='input' type='text' placeholder='Message...' />
             <button type='submit' class='btn btn-primary'>Send</button>
           </form>
+        </div>
+      </details>
+
+      <!-- Relay Audio (Collapsible, Open by default) -->
+      <details class='panel panel-details'>
+        <summary class='panel-header panel-header-details'>
+          <h2>Relay Audio</h2>
+          {% if relay_whep_url %}
+            <span id='relay-status' class='status-badge'>Not Listening</span>
+          {% else %}
+            <span class='status-badge status-warning'>Unconfigured</span>
+          {% endif %}
+        </summary>
+        <div class='panel-body'>
+          {% if relay_whep_url %}
+          <div class='form-group' style='margin-bottom: 0.5rem;'>
+            <button id='pass-relay' type='button' class='btn' style='width: 100%; margin-bottom: 0.5rem;' title='Listen to Relay'>
+              Listen to Relay ({{ relay_language_name }})
+            </button>
+          </div>
+          <div class='form-group' style='margin-bottom: 0.5rem;'>
+            <label for='relay-device-select' style='font-size: 0.85rem;'>Output Device</label>
+            <select id='relay-device-select' class='input device-select' style='width: 100%; font-size: 0.8rem; padding: 0.25rem;'><option value=''>Default output</option></select>
+            <div style='display: flex; align-items: center; gap: 0.3rem; margin-top: 0.2rem;'>
+              <input type='checkbox' id='show-virtual-relay-devices' style='margin: 0;'>
+              <label for='show-virtual-relay-devices' style='font-size: 0.7rem; color: var(--color-muted); cursor: pointer;'>Show virtual devices</label>
+            </div>
+          </div>
+          <div class='form-group'>
+            <label for='relay-volume' style='font-size: 0.85rem;'>Volume</label>
+            <input type='range' id='relay-volume' min='0' max='1' step='0.01' value='0.8' style='width: 100%;'>
+          </div>
+          {% else %}
+          <p style='font-size: 0.85rem; color: var(--color-muted); margin: 0;'>
+            No relay booth is configured for this room.
+          </p>
+          {% endif %}
         </div>
       </details>
       
@@ -165,5 +199,8 @@
   </div>
 </div>
 
+<audio id='relay-audio' autoplay hidden></audio>
+
+<script src="{{ url_for('static', path='js/whep-listener.js') }}"></script>
 <script type='module' src="{{ url_for('static', path='js/interpreter-booth.js') }}?v={{ js_version }}"></script>
 {% endblock %}
