@@ -141,6 +141,33 @@
         </div>
       </details>
       
+      <!-- Booth Audio (Collapsible, Closed by default) -->
+      <details class='panel panel-details'>
+        <summary class='panel-header panel-header-details'>
+          <h2>Booth Audio</h2>
+          <span id='booth-audio-status' class='status-badge'>Not Listening</span>
+        </summary>
+        <div class='panel-body'>
+          <div class='form-group' style='margin-bottom: 0.5rem;'>
+            <button id='listen-booth-btn' type='button' class='btn' style='width: 100%; margin-bottom: 0.5rem;' title='Listen to Booth'>
+              Listen to Booth ({{ booth_language }})
+            </button>
+          </div>
+          <div class='form-group' style='margin-bottom: 0.5rem;'>
+            <label for='booth-device-select' style='font-size: 0.85rem;'>Output Device</label>
+            <select id='booth-device-select' class='input device-select' style='width: 100%; font-size: 0.8rem; padding: 0.25rem;'><option value=''>Default output</option></select>
+            <div style='display: flex; align-items: center; gap: 0.3rem; margin-top: 0.2rem;'>
+              <input type='checkbox' id='show-virtual-booth-devices' style='margin: 0;'>
+              <label for='show-virtual-booth-devices' style='font-size: 0.7rem; color: var(--color-muted); cursor: pointer;'>Show virtual devices</label>
+            </div>
+          </div>
+          <div class='form-group'>
+            <label for='booth-volume' style='font-size: 0.85rem;'>Volume</label>
+            <input type='range' id='booth-volume' min='0' max='1' step='0.01' value='0.8' style='width: 100%;'>
+          </div>
+        </div>
+      </details>
+      
       <!-- Diagnostics (Collapsible, Closed by default) -->
       <details class='panel panel-details'>
         <summary class='panel-header panel-header-details'>
@@ -200,6 +227,7 @@
 </div>
 
 <audio id='relay-audio' autoplay hidden></audio>
+<audio id='booth-audio' autoplay hidden></audio>
 
 <script src="{{ url_for('static', path='js/whep-listener.js') }}"></script>
 <script type='module' src="{{ url_for('static', path='js/interpreter-booth.js') }}?v={{ js_version }}"></script>

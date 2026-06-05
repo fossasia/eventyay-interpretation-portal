@@ -10,7 +10,7 @@
  */
 'use strict';
 
-const WhepListener = (() => {
+function createWhepClient() {
 
   /** @type {RTCPeerConnection|null} */
   let pc = null;
@@ -209,4 +209,6 @@ const WhepListener = (() => {
       emitState();
     },
   };
-})();
+}
+
+const WhepListener = createWhepClient();
