@@ -1089,7 +1089,7 @@ function renderMicControls() {
   elements.micDeviceSelect.disabled = state.ingestConnected
 
   if (state.ingestConnected && state.boothId) {
-    const url = `${window.location.origin}/listener-webrtc/${encodeURIComponent(state.boothId)}`
+    const url = `${window.location.origin}/listener/${encodeURIComponent(portal.dataset.eventSlug)}`
     if (elements.listenerUrlDisplay) elements.listenerUrlDisplay.textContent = url
     if (elements.listenerUrlRow) elements.listenerUrlRow.classList.remove('hidden')
   } else {
