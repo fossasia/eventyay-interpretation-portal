@@ -734,8 +734,8 @@ async function populateBoothDevices() {
 }
 
 // ── WHEP Clients ──────────────────────────────────────────────────────────────
-const relayWhep = window.createWhepClient ? window.createWhepClient() : window.WhepListener
-const boothWhep = window.createWhepClient ? window.createWhepClient() : window.WhepListener
+const relayWhep = typeof createWhepClient === 'function' ? createWhepClient() : (typeof WhepListener !== 'undefined' ? WhepListener : null)
+const boothWhep = typeof createWhepClient === 'function' ? createWhepClient() : (typeof WhepListener !== 'undefined' ? WhepListener : null)
 
 // ── Relay Listening ───────────────────────────────────────────────────────────
 
