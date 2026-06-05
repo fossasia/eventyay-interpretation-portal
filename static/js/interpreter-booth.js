@@ -1083,13 +1083,13 @@ function renderMicControls() {
   elements.toggleMic.disabled = !state.joined
   const preflightCriticalPass =
     state.preflight.micPermission === 'pass' &&
-    state.preflight.serverReachable !== 'fail'
+      state.preflight.serverReachable !== 'fail'
   elements.goLive.disabled = !state.ingestConnected && (!joinedActiveInterpreter || !state.ingestReachable || !preflightCriticalPass)
   elements.passRelay.disabled = !joinedActiveInterpreter
   elements.micDeviceSelect.disabled = state.ingestConnected
 
-  if (state.ingestConnected && state.boothId) {
-    const url = `${window.location.origin}/listener-webrtc/${encodeURIComponent(state.boothId)}`
+  if (state.ingestConnected && portal.dataset.whepUrl) {
+    const url = portal.dataset.whepUrl
     if (elements.listenerUrlDisplay) elements.listenerUrlDisplay.textContent = url
     if (elements.listenerUrlRow) elements.listenerUrlRow.classList.remove('hidden')
   } else {
