@@ -78,9 +78,6 @@
     margin-bottom: 0.3rem;
   }
   .selector-group select {
-    padding: 0.4rem;
-    border: 1px solid #ccc;
-    border-radius: 4px;
     min-width: 150px;
   }
 </style>
@@ -92,7 +89,7 @@
   <div class="selectors-container">
     <div class="selector-group">
       <label for="room-select">Room</label>
-      <select id="room-select">
+      <select id="room-select" class="input">
         <option value="">-- Select Room --</option>
         {% for room in rooms %}
         <option value="{{ room.id }}">{{ room.display_name }}</option>
@@ -101,7 +98,7 @@
     </div>
     <div class="selector-group">
       <label for="language-select">Language</label>
-      <select id="language-select" disabled>
+      <select id="language-select" class="input" disabled>
         <option value="">-- Select Language --</option>
       </select>
     </div>
