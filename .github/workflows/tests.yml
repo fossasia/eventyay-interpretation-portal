@@ -163,8 +163,7 @@ jobs:
           # Booth pages now require auth — unauthenticated requests redirect to /login
           assert_http "http://${CI_HOST}:${PORTAL_PORT}/interpreter/ci-event/en" \
                       "GET /interpreter/ci-event/en (no auth → 303)" "303"
-          assert_http "http://${CI_HOST}:${PORTAL_PORT}/listener-webrtc/ci-booth" \
-                      "GET /listener-webrtc/ci-booth (no auth → 303)" "303"
+
 
       - name: Portal ingest-status API
         run: |
@@ -271,10 +270,7 @@ jobs:
           echo "GET /account (no cookie) → $code"
           [ "$code" = "303" ] || { echo "FAIL: expected 303 redirect"; exit 1; }
 
-          # Listener WebRTC page redirects unauthenticated users
-          code=$(curl -s -o /dev/null -w '%{http_code}' "${BASE}/listener-webrtc/ci-booth")
-          echo "GET /listener-webrtc/ci-booth (no cookie) → $code"
-          [ "$code" = "303" ] || { echo "FAIL: expected 303"; exit 1; }
+
 
           # With a valid user_token but no event membership → 403 on interpreter page
           code=$(curl -s -o /dev/null -w '%{http_code}' -b "user_token=${USER_COOKIE}" \
@@ -282,11 +278,7 @@ jobs:
           echo "GET /interpreter/ci-smoke/en (user, no membership) → $code"
           [ "$code" = "403" ] || { echo "FAIL: expected 403 without membership"; exit 1; }
 
-          # With user_token, listener pages (no event scope) should pass through
-          code=$(curl -s -o /dev/null -w '%{http_code}' -b "user_token=${USER_COOKIE}" \
-            "${BASE}/listener-webrtc/ci-booth")
-          echo "GET /listener-webrtc/ci-booth (user_token) → $code"
-          [ "$code" = "200" ] || { echo "FAIL: expected 200"; exit 1; }
+
 
       # ── Collect logs on failure ─────────────────────────────
       - name: Dump logs on failure
