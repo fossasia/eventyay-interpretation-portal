@@ -1166,10 +1166,16 @@ async def admin_room_detail(request: Request, event_id: int, room_id: int):
         is_live = mem_booth is not None and mem_booth.ingest_status == 'connected'
         booth_statuses.append({'db': b, 'booth_id': bid, 'is_live': is_live})
 
+    import re
+    clean_name = re.sub(r'[^a-zA-Z0-9]+', '', room.display_name)
+    room_id_str = f"Voxbento-{event.slug}-{clean_name}"
+    fallback_jitsi_url = _make_jitsi_url(settings.effective_jitsi_base_url, room_id_str)
+
     return templates.TemplateResponse(request, 'admin/room_detail.html', {
         'event': event,
         'room': room,
         'booths': booth_statuses,
+        'fallback_jitsi_url': fallback_jitsi_url,
     })
 
 
