@@ -547,8 +547,7 @@ function joinMonitoringFeed() {
       'config.startWithAudioMuted': 'true',
       'config.startWithVideoMuted': 'true',
       'config.prejoinPageEnabled': 'false',
-      'config.disableInitialGUM': 'true',
-      'config.startSilent': 'true',
+      'config.disableInitialGUM': 'false',
     }).toString()
     elements.jitsiFrame.src = `${meetingUrl.origin}${meetingUrl.pathname}#${hash}`
     setBadge(elements.monitorStatus, 'Connecting', 'warning')
