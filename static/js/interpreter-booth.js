@@ -324,8 +324,7 @@ function bindEventHandlers() {
       state.ws.close(1000)
       state.ws = null
     }
-    setBadge(elements.connectionStatus, 'Left', 'warning')
-    renderMicControls()
+    window.location.reload()
   })
 
   if (navigator.mediaDevices) {
