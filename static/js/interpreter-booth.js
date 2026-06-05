@@ -182,6 +182,7 @@ function handleServerMessage(data) {
     // skipAutoStart: the server auto-sets the first interpreter as active on
     // join, but the interpreter must press Go Live themselves.
     applyBoothState(data.state, { skipAutoStart: true })
+    joinMonitoringFeed()
     render()
     showError('')
   } else if (type === 'booth:state') {
@@ -218,10 +219,6 @@ function authHeaders() {
 function bindEventHandlers() {
   elements.joinBooth.addEventListener('click', () => {
     joinBooth()
-  })
-
-  elements.joinJitsi.addEventListener('click', () => {
-    joinMonitoringFeed()
   })
 
   elements.jitsiFrame.addEventListener('load', () => {
@@ -533,7 +530,7 @@ function joinBooth() {
 
 function joinMonitoringFeed() {
   try {
-    const rawUrl = elements.jitsiUrl.value.trim()
+    const rawUrl = portal.dataset.jitsiUrl
     if (!rawUrl) {
       showError('Jitsi meeting URL is required.')
       return
@@ -543,14 +540,21 @@ function joinMonitoringFeed() {
       showError(`Jitsi URL must use ${state.jitsiDomain}.`)
       return
     }
-    const hash = new URLSearchParams({
+    const hashParams = new URLSearchParams({
       'config.startWithAudioMuted': 'true',
       'config.startWithVideoMuted': 'true',
       'config.prejoinPageEnabled': 'false',
       'config.disableInitialGUM': 'false',
-    }).toString()
+    })
+    
+    // Add user info to Jitsi URL config
+    const dName = elements.displayName ? elements.displayName.value.trim() : ''
+    if (dName) {
+      hashParams.set('userInfo.displayName', `"${dName}"`)
+    }
+    
+    const hash = hashParams.toString()
     elements.jitsiFrame.src = `${meetingUrl.origin}${meetingUrl.pathname}#${hash}`
-    setBadge(elements.monitorStatus, 'Connecting', 'warning')
     showError('')
   } catch (error) {
     showError(`Invalid Jitsi URL: ${error.message}`)
