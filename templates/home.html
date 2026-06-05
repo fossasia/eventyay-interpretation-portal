@@ -72,7 +72,7 @@
                   <tr>
                     <th>Language</th>
                     <th>Status</th>
-                    <th>Listen</th>
+                    <th>Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -87,7 +87,6 @@
                       {% endif %}
                     </td>
                     <td style="display: flex; gap: 0.5rem; align-items: center;">
-                      <a href="/listener-webrtc/{{ bs.booth_id }}" class="btn btn-sm">Listen ↗</a>
                       {% if bs.can_interpret %}
                       <a href="/interpreter/{{ ed.event.slug }}/{{ bs.db.language_code }}" class="btn btn-sm btn-outline" style="border-color: #007bff; color: #007bff; background: transparent;">Open Booth ↗</a>
                       {% endif %}
@@ -100,6 +99,11 @@
               <p class="muted">No interpretation booths configured yet.</p>
               {% endif %}
             </div>
+            {% if ed.booths %}
+            <div class="card-footer" style="padding: 1rem; border-top: 1px solid var(--border-color, #dee2e6);">
+              <a href="/listener/{{ ed.event.slug }}" class="btn btn-primary" style="width: 100%; text-align: center; display: block;">Listen to Event ↗</a>
+            </div>
+            {% endif %}
           </div>
           {% endfor %}
         </div>

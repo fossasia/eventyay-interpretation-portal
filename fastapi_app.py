@@ -490,39 +490,54 @@ async def interpreter_booth(
     )
 
 
-@app.get('/listener-webrtc/{booth_id}')
-async def listen_webrtc_booth(
+@app.get('/listener/{event_slug}')
+async def listen_event_page(
     request: Request,
-    booth_id: str,
-    language: str = 'English',
-    channel: str | None = Query(None),
+    event_slug: str,
 ) -> Any:
-    """Listener page using WHEP/WebRTC for low-latency playback."""
+    """Listener page scoped by event, allowing users to select room and language."""
     payload = get_booth_session(request)
     if payload is None:
         return safe_redirect(
-            url=f'/login?next=/listener-webrtc/{booth_id}',
+            url=f'/login?next=/listener/{event_slug}',
             status_code=status.HTTP_303_SEE_OTHER,
         )
-    if channel:
-        channel_id = channel
-    else:
-        try:
-            from portal.booth_identity import booth_id_to_mediamtx_path
-            channel_id = booth_id_to_mediamtx_path(booth_id)
-        except ValueError:
-            channel_id = f'{booth_id}-audio'
 
-    await _ensure_mediamtx_path(channel_id)
-    whep_url = f'{settings.mediamtx_whip_base}/{channel_id}/whep'
+    from portal.database import get_session, get_event_by_slug, list_booths_for_event, list_rooms_for_event
+    import asyncio
+    
+    async with get_session() as session:
+        ev = await get_event_by_slug(session, event_slug)
+        if not ev:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
+        
+        rooms = await list_rooms_for_event(session, ev.id)
+        db_booths = await list_booths_for_event(session, ev.id)
+        
+    booths_data = []
+    ensure_tasks = []
+    for b in db_booths:
+        channel_id = b.mediamtx_path
+        booths_data.append({
+            'id': b.id,
+            'room_id': b.room_id,
+            'language_code': b.language_code,
+            'language_name': b.language_name,
+            'channel_id': channel_id,
+            'whep_url': f'{settings.mediamtx_whip_base}/{channel_id}/whep'
+        })
+        ensure_tasks.append(_ensure_mediamtx_path(channel_id))
+        
+    if ensure_tasks:
+        await asyncio.gather(*ensure_tasks)
+
     return templates.TemplateResponse(
         request,
-        'listener-webrtc.html',
+        'listener-event.html',
         {
-            'booth_id': booth_id,
-            'language': language,
-            'channel_id': channel_id,
-            'whep_url': whep_url,
+            'event': ev,
+            'rooms': rooms,
+            'booths_json': json.dumps(booths_data),
             'js_version': _JS_CACHE_BUST,
         },
     )
