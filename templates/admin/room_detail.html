@@ -21,21 +21,37 @@
 </div>
 
 <!-- Room Settings Form -->
-<div class="token-form-card" style="margin-bottom: 2rem;">
-  <h3>Room Settings</h3>
-  <form method="post" action="/admin/events/{{ event.id }}/rooms/{{ room.id }}/edit" class="token-form">
+<form method="post" action="/admin/events/{{ event.id }}/rooms/{{ room.id }}/edit" class="token-form">
+  <div class="token-form-card" style="margin-bottom: 1.5rem;">
+    <h3>Room Settings</h3>
     <div class="form-row">
       <div class="form-group" style="flex: 1;">
         <label for="jitsi_url">Jitsi URL</label>
         <input type="url" id="jitsi_url" name="jitsi_url" value="{{ room.jitsi_url or fallback_jitsi_url }}" placeholder="e.g. https://jitsi.voxbento.com/Room-Event-TrackA">
       </div>
-      <div class="form-group form-group-btn">
-        <button type="submit" class="btn btn-primary">Save Settings</button>
-      </div>
     </div>
     <p class="form-help" style="margin-top: 0.5rem; font-size: 0.85rem; color: #666;">Interpreters in all booths for this room will automatically join this Jitsi URL for floor monitoring.</p>
-  </form>
-</div>
+  </div>
+
+  <div class="token-form-card" style="margin-bottom: 2rem;">
+    <h3>Relay Settings</h3>
+    <div class="form-row">
+      <div class="form-group" style="flex: 1;">
+        <label for="relay_booth_id">Relay Booth</label>
+        <select id="relay_booth_id" name="relay_booth_id" class="input">
+          <option value="none">-- None --</option>
+          {% for bs in booths %}
+            <option value="{{ bs.db.id }}" {% if room.relay_booth_id == bs.db.id %}selected{% endif %}>{{ bs.db.language_name }} ({{ bs.db.language_code }})</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group form-group-btn" style="display: flex; align-items: flex-end;">
+        <button type="submit" class="btn btn-primary" style="margin-bottom: 0.25rem;">Save Settings</button>
+      </div>
+    </div>
+    <p class="form-help" style="margin-top: 0.5rem; font-size: 0.85rem; color: #666;">Designate a booth to act as the relay source for interpreters in other booths.</p>
+  </div>
+</form>
 
 <!-- Interpretation Schedule Table (replaces manual spreadsheet) -->
 <div class="section-card">
