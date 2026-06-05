@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Listen (WebRTC) — {{ booth_id }} | Voxbento{% endblock %}
+{% block title %}Listen (WebRTC) — {{ event.display_name }} | Voxbento{% endblock %}
 {% block head %}
 <style>
   .listener-container {
@@ -61,20 +61,53 @@
     border: 1px solid #dee2e6;
   }
 
-  .mode-link {
-    font-size: 0.82rem;
-    margin-top: 0.5rem;
-    color: #666;
+  .selectors-container {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    margin-bottom: 1.5rem;
   }
-  .mode-link a { color: #0066cc; }
+  .selector-group {
+    display: flex;
+    flex-direction: column;
+    text-align: left;
+  }
+  .selector-group label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 0.3rem;
+  }
+  .selector-group select {
+    padding: 0.4rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    min-width: 150px;
+  }
 </style>
 {% endblock %}
 {% block content %}
 <div class="listener-container">
-  <h1>🎧 Listening (WebRTC): {{ booth_id }}</h1>
-  <p>Language: {{ language }} &middot; Channel: {{ channel_id }}</p>
+  <h1>🎧 Listen: {{ event.display_name }}</h1>
+  
+  <div class="selectors-container">
+    <div class="selector-group">
+      <label for="room-select">Room</label>
+      <select id="room-select">
+        <option value="">-- Select Room --</option>
+        {% for room in rooms %}
+        <option value="{{ room.id }}">{{ room.display_name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="selector-group">
+      <label for="language-select">Language</label>
+      <select id="language-select" disabled>
+        <option value="">-- Select Language --</option>
+      </select>
+    </div>
+  </div>
 
-  <div id="status"><span class="status-badge waiting">Connecting...</span></div>
+  <div id="status"><span class="status-badge waiting">Waiting for selection...</span></div>
   <audio id="audio-player" controls autoplay></audio>
 
   <div class="debug-panel">
@@ -89,24 +122,25 @@
   </div>
 
   <div id="stream-log"></div>
-
-
 </div>
 
 <script src="{{ url_for('static', path='js/whep-listener.js') }}?v={{ js_version }}"></script>
 <script>
 (function () {
-  var whepUrl  = '{{ whep_url }}';
-  var audioEl  = document.getElementById('audio-player');
+  var boothsData = {{ booths_json | safe }};
+  
+  var roomSelect = document.getElementById('room-select');
+  var languageSelect = document.getElementById('language-select');
+  var audioEl = document.getElementById('audio-player');
   var statusEl = document.getElementById('status');
-  var logEl    = document.getElementById('stream-log');
+  var logEl = document.getElementById('stream-log');
 
   // Debug fields
-  var dbgPc    = document.getElementById('dbg-pc');
-  var dbgIce   = document.getElementById('dbg-ice');
-  var dbgSig   = document.getElementById('dbg-sig');
+  var dbgPc = document.getElementById('dbg-pc');
+  var dbgIce = document.getElementById('dbg-ice');
+  var dbgSig = document.getElementById('dbg-sig');
   var dbgAudio = document.getElementById('dbg-audio');
-  var dbgUrl   = document.getElementById('dbg-url');
+  var dbgUrl = document.getElementById('dbg-url');
 
   function setStatus(text, cls) {
     statusEl.innerHTML = '<span class="status-badge ' + cls + '">' + text + '</span>';
@@ -139,11 +173,50 @@
     }
   }
 
-  WhepListener.start({
-    whepUrl: whepUrl,
-    audioEl: audioEl,
-    onState: onState,
-    onLog:   appendLog,
+  function stopCurrentStream() {
+    WhepListener.stop();
+    setStatus('Waiting for selection...', 'waiting');
+    dbgPc.textContent = '—';
+    dbgIce.textContent = '—';
+    dbgSig.textContent = '—';
+    dbgAudio.textContent = '—';
+    dbgUrl.textContent = '—';
+  }
+
+  roomSelect.addEventListener('change', function() {
+    var roomId = parseInt(this.value, 10);
+    languageSelect.innerHTML = '<option value="">-- Select Language --</option>';
+    
+    stopCurrentStream();
+
+    if (!roomId) {
+      languageSelect.disabled = true;
+      return;
+    }
+    
+    languageSelect.disabled = false;
+    var roomBooths = boothsData.filter(function(b) { return b.room_id === roomId; });
+    
+    roomBooths.forEach(function(b) {
+      var opt = document.createElement('option');
+      opt.value = b.whep_url;
+      opt.textContent = b.language_name;
+      languageSelect.appendChild(opt);
+    });
+  });
+
+  languageSelect.addEventListener('change', function() {
+    stopCurrentStream();
+    var whepUrl = this.value;
+    if (whepUrl) {
+      setStatus('Connecting...', 'recovering');
+      WhepListener.start({
+        whepUrl: whepUrl,
+        audioEl: audioEl,
+        onState: onState,
+        onLog: appendLog,
+      });
+    }
   });
 
   // Clean up on page unload.
