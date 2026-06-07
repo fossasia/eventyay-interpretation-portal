@@ -21,7 +21,7 @@ def get_model(model_size: str):
         return _current_model
     with _model_lock:
         if _current_model_size != model_size:
-            logger.info(f"Loading faster-whisper model: {model_size}")
+            print(f"Loading faster-whisper model: {model_size}")
             if _current_model is not None:
                 del _current_model
                 import gc
@@ -59,7 +59,7 @@ class LocalProvider(TranscriptionProvider):
 class OpenAIProvider(TranscriptionProvider):
     async def process_chunk(self, chunk: bytes, language_code: str, model_variant: str, api_key: str | None) -> str:
         if not api_key:
-            logger.error("OpenAI API key missing")
+            print(f"OpenAI API key missing")
             return ""
         
         wav_data = pcm_to_wav(chunk)
@@ -78,15 +78,15 @@ class OpenAIProvider(TranscriptionProvider):
                 if resp.status_code == 200:
                     return resp.json().get("text", "").strip()
                 else:
-                    logger.error(f"OpenAI error: {resp.text}")
+                    print(f"OpenAI error: {resp.text}")
             except Exception as e:
-                logger.error(f"OpenAI request failed: {e}")
+                print(f"OpenAI request failed: {e}")
         return ""
 
 class DeepgramProvider(TranscriptionProvider):
     async def process_chunk(self, chunk: bytes, language_code: str, model_variant: str, api_key: str | None) -> str:
         if not api_key:
-            logger.error("Deepgram API key missing")
+            print(f"Deepgram API key missing")
             return ""
             
         headers = {
@@ -106,32 +106,57 @@ class DeepgramProvider(TranscriptionProvider):
                     except (KeyError, IndexError):
                         pass
                 else:
-                    logger.error(f"Deepgram error: {resp.text}")
+                    print(f"Deepgram error: {resp.text}")
             except Exception as e:
-                logger.error(f"Deepgram request failed: {e}")
+                print(f"Deepgram request failed: {e}")
         return ""
 
 class NVIDIAProvider(TranscriptionProvider):
     async def process_chunk(self, chunk: bytes, language_code: str, model_variant: str, api_key: str | None) -> str:
         if not api_key:
-            logger.error("NVIDIA API key missing")
+            print(f"NVIDIA API key missing")
             return ""
             
-        wav_data = pcm_to_wav(chunk)
-        headers = {"Authorization": f"Bearer {api_key}"}
-        
-        async with httpx.AsyncClient() as client:
+        def _run_riva():
+            import riva.client as rc
+            
+            # Map standard language code 'en' to 'en-US' since NVIDIA requires region
+            riva_lang = "en-US" if language_code == "en" else language_code
+            
+            # The function-id is specific to the model on NIM. 
+            # We use the provided parakeet function-id by default.
+            function_id = "d8dd4e9b-fbf5-4fb0-9dba-8cf436c8d965"
+            
+            auth = rc.Auth(
+                use_ssl=True,
+                uri="grpc.nvcf.nvidia.com:443",
+                metadata_args=[
+                    ["function-id", function_id],
+                    ["authorization", f"Bearer {api_key}"]
+                ]
+            )
+            asr_service = rc.ASRService(auth)
+            config = rc.RecognitionConfig(
+                encoding=rc.AudioEncoding.LINEAR_PCM,
+                sample_rate_hertz=16000,
+                audio_channel_count=1,
+                language_code=riva_lang,
+                max_alternatives=1,
+                enable_automatic_punctuation=True
+            )
+            
             try:
-                files = {"file": ("audio.wav", wav_data, "audio/wav")}
-                # Placeholder NVIDIA parakeet NVCF endpoint
-                url = "https://api.nvcf.nvidia.com/v2/nvcf/pexec/functions/ea20e3ad-2868-4a56-b0ff-94b1ef86e1cd"
-                resp = await client.post(url, headers=headers, files=files, timeout=10.0)
-                if resp.status_code == 200:
-                    # In a real scenario, map NVIDIA's specific JSON structure
-                    return str(resp.json()) 
+                response = asr_service.offline_recognize(chunk, config)
+                text = ""
+                for result in response.results:
+                    if result.alternatives:
+                        text += result.alternatives[0].transcript + " "
+                return text.strip()
             except Exception as e:
-                logger.error(f"NVIDIA request failed: {e}")
-        return ""
+                print(f"NVIDIA API Error: {e}")
+                return ""
+                
+        return await asyncio.to_thread(_run_riva)
 
 PROVIDERS = {
     'local': LocalProvider(),
@@ -145,7 +170,7 @@ active_workers: dict[str, asyncio.Task] = {}
 active_processes: dict[str, asyncio.subprocess.Process] = {}
 
 async def transcription_worker(event_slug: str, language_code: str, booth_id: str, broadcast_callback, provider_name: str, model_size: str, api_key: str | None):
-    logger.info(f"Starting {provider_name} transcription worker for booth {booth_id}")
+    print(f"Starting {provider_name} transcription worker for booth {booth_id}")
     rtsp_url = f"rtsp://mediamtx:8554/{event_slug}/{language_code}"
     
     provider = PROVIDERS.get(provider_name, PROVIDERS['local'])
@@ -179,16 +204,16 @@ async def transcription_worker(event_slug: str, language_code: str, booth_id: st
             text = await provider.process_chunk(chunk, language_code, model_size, api_key)
             
             if text:
-                logger.debug(f"[{booth_id}] Transcribed: {text}")
+                print(f"[{booth_id}] Transcribed: {text}")
                 await broadcast_callback(booth_id, text)
                 
     except asyncio.IncompleteReadError:
-        logger.warning(f"[{booth_id}] ffmpeg stream ended abruptly.")
+        print(f"[{booth_id}] ffmpeg stream ended abruptly.")
     except asyncio.CancelledError:
-        logger.info(f"[{booth_id}] Transcription worker cancelled.")
+        print(f"[{booth_id}] Transcription worker cancelled.")
         raise
     except Exception as e:
-        logger.error(f"[{booth_id}] Transcription error: {e}")
+        print(f"[{booth_id}] Transcription error: {e}")
     finally:
         if process.returncode is None:
             try:
@@ -198,11 +223,11 @@ async def transcription_worker(event_slug: str, language_code: str, booth_id: st
                 pass
         active_processes.pop(booth_id, None)
         active_workers.pop(booth_id, None)
-        logger.info(f"[{booth_id}] Transcription worker exited.")
+        print(f"[{booth_id}] Transcription worker exited.")
 
 async def start_transcription_worker(event_slug: str, language_code: str, booth_id: str, broadcast_callback, provider: str, model_size: str, api_key: str | None = None):
     if booth_id in active_workers:
-        logger.warning(f"Transcription worker for {booth_id} is already running.")
+        print(f"Transcription worker for {booth_id} is already running.")
         return
         
     task = asyncio.create_task(transcription_worker(event_slug, language_code, booth_id, broadcast_callback, provider, model_size, api_key))
@@ -214,8 +239,10 @@ async def stop_transcription_worker(booth_id: str):
         task.cancel()
         try:
             await task
+        except asyncio.CancelledError:
+            pass
         except Exception as e:
-            logger.debug(f"Task finished with exception: {e}")
+            print(f"Task finished with exception: {e}")
     
     process = active_processes.get(booth_id)
     if process and process.returncode is None:
