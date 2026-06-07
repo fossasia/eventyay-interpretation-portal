@@ -158,11 +158,39 @@ class NVIDIAProvider(TranscriptionProvider):
                 
         return await asyncio.to_thread(_run_riva)
 
+class ElevenLabsProvider(TranscriptionProvider):
+    async def process_chunk(self, chunk: bytes, language_code: str, model_variant: str, api_key: str | None) -> str:
+        if not api_key:
+            print(f"ElevenLabs API key missing")
+            return ""
+            
+        wav_data = pcm_to_wav(chunk)
+        headers = {"xi-api-key": api_key}
+        files = {
+            "file": ("audio.wav", wav_data, "audio/wav"),
+        }
+        data = {
+            "model_id": model_variant,
+            "language_code": language_code
+        }
+        
+        async with httpx.AsyncClient() as client:
+            try:
+                resp = await client.post("https://api.elevenlabs.io/v1/speech-to-text", headers=headers, files=files, data=data, timeout=10.0)
+                if resp.status_code == 200:
+                    return resp.json().get("text", "").strip()
+                else:
+                    print(f"ElevenLabs error: {resp.text}")
+            except Exception as e:
+                print(f"ElevenLabs request failed: {e}")
+        return ""
+
 PROVIDERS = {
     'local': LocalProvider(),
     'openai': OpenAIProvider(),
     'deepgram': DeepgramProvider(),
     'nvidia': NVIDIAProvider(),
+    'elevenlabs': ElevenLabsProvider(),
 }
 
 # --- Worker ---

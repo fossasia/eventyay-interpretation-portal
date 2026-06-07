@@ -113,6 +113,7 @@
           <option value="openai" {% if booth.transcription_provider == 'openai' %}selected{% endif %}>OpenAI</option>
           <option value="deepgram" {% if booth.transcription_provider == 'deepgram' %}selected{% endif %}>Deepgram</option>
           <option value="nvidia" {% if booth.transcription_provider == 'nvidia' %}selected{% endif %}>NVIDIA Parakeet</option>
+          <option value="elevenlabs" {% if booth.transcription_provider == 'elevenlabs' %}selected{% endif %}>ElevenLabs</option>
           {% else %}
           <option disabled>External APIs disabled in Event settings</option>
           {% endif %}
@@ -130,6 +131,7 @@
           <option value="whisper-1" data-provider="openai" {% if booth.transcription_model == 'whisper-1' %}selected{% endif %}>OpenAI: whisper-1</option>
           <option value="nova-2" data-provider="deepgram" {% if booth.transcription_model == 'nova-2' %}selected{% endif %}>Deepgram: nova-2</option>
           <option value="parakeet-rnnt" data-provider="nvidia" {% if booth.transcription_model == 'parakeet-rnnt' %}selected{% endif %}>NVIDIA: parakeet-rnnt</option>
+          <option value="scribe_v2" data-provider="elevenlabs" {% if booth.transcription_model == 'scribe_v2' %}selected{% endif %}>ElevenLabs: scribe_v2</option>
         </select>
       </div>
       <div class="form-group form-group-btn">

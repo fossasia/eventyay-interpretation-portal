@@ -66,6 +66,7 @@ class Event(Base):
     openai_api_key: Mapped[str | None] = mapped_column(String(255), nullable=True, default=None)
     deepgram_api_key: Mapped[str | None] = mapped_column(String(255), nullable=True, default=None)
     nvidia_api_key: Mapped[str | None] = mapped_column(String(255), nullable=True, default=None)
+    elevenlabs_api_key: Mapped[str | None] = mapped_column(String(255), nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
     rooms: Mapped[list[Room]] = relationship(back_populates='event', cascade='all, delete-orphan')

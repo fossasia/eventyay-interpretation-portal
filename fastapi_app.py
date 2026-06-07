@@ -1158,6 +1158,7 @@ async def admin_event_api_settings_post(
     openai_api_key: str | None = Form(None),
     deepgram_api_key: str | None = Form(None),
     nvidia_api_key: str | None = Form(None),
+    elevenlabs_api_key: str | None = Form(None),
 ):
     from portal.database import get_session, get_event_by_id
 
@@ -1170,6 +1171,7 @@ async def admin_event_api_settings_post(
         event.openai_api_key = openai_api_key if openai_api_key else None
         event.deepgram_api_key = deepgram_api_key if deepgram_api_key else None
         event.nvidia_api_key = nvidia_api_key if nvidia_api_key else None
+        event.elevenlabs_api_key = elevenlabs_api_key if elevenlabs_api_key else None
         
         await session.commit()
         
@@ -1532,6 +1534,8 @@ async def admin_transcription_settings(
                     api_key = event.deepgram_api_key
                 elif transcription_provider == 'nvidia':
                     api_key = event.nvidia_api_key
+                elif transcription_provider == 'elevenlabs':
+                    api_key = event.elevenlabs_api_key
                     
                 import asyncio
                 await asyncio.sleep(0.1)
@@ -1881,6 +1885,8 @@ async def api_transcription_start(booth_id: str, request: Request):
             api_key = db_booth.event.deepgram_api_key
         elif provider == 'nvidia':
             api_key = db_booth.event.nvidia_api_key
+        elif provider == 'elevenlabs':
+            api_key = db_booth.event.elevenlabs_api_key
 
     await start_transcription_worker(event_slug, language_code, booth_id, broadcast_transcription, provider, model_size, api_key)
     return {"status": "started", "provider": provider, "model": model_size}
