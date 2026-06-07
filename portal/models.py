@@ -62,6 +62,10 @@ class Event(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     slug: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     display_name: Mapped[str] = mapped_column(String(200))
+    transcription_api_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default='0')
+    openai_api_key: Mapped[str | None] = mapped_column(String(255), nullable=True, default=None)
+    deepgram_api_key: Mapped[str | None] = mapped_column(String(255), nullable=True, default=None)
+    nvidia_api_key: Mapped[str | None] = mapped_column(String(255), nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
     rooms: Mapped[list[Room]] = relationship(back_populates='event', cascade='all, delete-orphan')
@@ -121,6 +125,7 @@ class DBBooth(Base):
     language_code: Mapped[str] = mapped_column(String(2))
     language_name: Mapped[str] = mapped_column(String(100))
     transcription_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default='0')
+    transcription_provider: Mapped[str] = mapped_column(String(20), default='local', server_default="'local'")
     transcription_model: Mapped[str] = mapped_column(String(20), default='tiny', server_default="'tiny'")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
