@@ -101,12 +101,23 @@ async def require_admin(request: Request) -> None:
     ``admin=True`` claim. Also accepts a valid ``user_token`` with
     ``is_admin=True``. Returns None on success; raises HTTP 403 on failure.
     """
+    event_id_str = request.path_params.get('event_id')
+    event_id = int(event_id_str) if event_id_str and event_id_str.isdigit() else None
+
     user_cookie = request.cookies.get('user_token', '')
     if user_cookie:
         try:
             payload = decode_token(user_cookie)
-            if payload.get('user') and payload.get('is_admin'):
-                return
+            if payload.get('user'):
+                if payload.get('is_admin'):
+                    return
+                if event_id is not None and payload.get('sub'):
+                    from portal.database import get_session, list_memberships_for_user
+                    async with get_session() as db_session:
+                        memberships = await list_memberships_for_user(db_session, int(payload['sub']))
+                        for m in memberships:
+                            if m.event_id == event_id and m.role == 'event_admin':
+                                return
         except jwt.InvalidTokenError:
             pass
 

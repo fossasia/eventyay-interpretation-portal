@@ -1465,8 +1465,8 @@ async def admin_transcription_settings(
         bid = make_booth_id(event.slug, db_booth.language_code)
         
         # Check if booth is live
-        state = booths.get(bid)
-        is_live = state is not None and state.active_publisher_id is not None
+        state = booths.get_booth_sync(bid)
+        is_live = state is not None and state.active_interpreter_id is not None
         
         if is_live:
             if not transcription_enabled:
