@@ -1442,7 +1442,6 @@ async def admin_transcription_settings(
 ):
     from portal.database import get_session, get_booth_by_id, get_event_by_id
     from portal.booth_identity import make_booth_id
-    from portal.booth_state import booths
     from portal.transcription import start_transcription_worker, stop_transcription_worker
 
     async with get_session() as session:
