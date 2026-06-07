@@ -1168,10 +1168,14 @@ async def admin_event_api_settings_post(
             raise HTTPException(status_code=404, detail='Event not found.')
         
         event.transcription_api_enabled = bool(transcription_api_enabled)
-        event.openai_api_key = openai_api_key if openai_api_key else None
-        event.deepgram_api_key = deepgram_api_key if deepgram_api_key else None
-        event.nvidia_api_key = nvidia_api_key if nvidia_api_key else None
-        event.elevenlabs_api_key = elevenlabs_api_key if elevenlabs_api_key else None
+        if openai_api_key and openai_api_key.strip():
+            event.openai_api_key = openai_api_key.strip()
+        if deepgram_api_key and deepgram_api_key.strip():
+            event.deepgram_api_key = deepgram_api_key.strip()
+        if nvidia_api_key and nvidia_api_key.strip():
+            event.nvidia_api_key = nvidia_api_key.strip()
+        if elevenlabs_api_key and elevenlabs_api_key.strip():
+            event.elevenlabs_api_key = elevenlabs_api_key.strip()
         
         await session.commit()
         
@@ -1498,6 +1502,10 @@ async def admin_transcription_settings(
         db_booth = await get_booth_by_id(session, booth_id)
         if db_booth is None or db_booth.room_id != room_id:
             raise HTTPException(status_code=404, detail='Booth not found.')
+            
+        ALLOWED_PROVIDERS = {"local", "openai", "deepgram", "nvidia", "elevenlabs"}
+        if transcription_provider not in ALLOWED_PROVIDERS:
+            raise HTTPException(status_code=400, detail="Invalid transcription provider")
             
         event = await get_event_by_id(session, event_id)
         if event is None:
@@ -1853,7 +1861,13 @@ async def ws_captions(websocket: WebSocket, booth_id: str) -> None:
         listener_manager.remove(websocket, booth_id)
 
 @app.post('/api/booth/{booth_id}/transcription/start')
-async def api_transcription_start(booth_id: str, request: Request):
+async def api_transcription_start(
+    booth_id: str, 
+    request: Request,
+    token: str = Query(''),
+    credentials: HTTPAuthorizationCredentials | None = Depends(security)
+):
+    _require_access(credentials, token)
     data = await request.json()
     event_slug = data.get('event_slug')
     language_code = data.get('language_code')
@@ -1878,6 +1892,10 @@ async def api_transcription_start(booth_id: str, request: Request):
         provider = db_booth.transcription_provider
         model_size = db_booth.transcription_model
         
+        if not db_booth.event.transcription_api_enabled and provider != 'local':
+            provider = 'local'
+            model_size = 'tiny'
+        
         api_key = None
         if provider == 'openai':
             api_key = db_booth.event.openai_api_key
@@ -1887,12 +1905,20 @@ async def api_transcription_start(booth_id: str, request: Request):
             api_key = db_booth.event.nvidia_api_key
         elif provider == 'elevenlabs':
             api_key = db_booth.event.elevenlabs_api_key
+            
+        if provider != 'local' and not api_key:
+            raise HTTPException(status_code=400, detail=f"{provider} API key missing. Cannot start transcription.")
 
     await start_transcription_worker(event_slug, language_code, booth_id, broadcast_transcription, provider, model_size, api_key)
     return {"status": "started", "provider": provider, "model": model_size}
 
 @app.post('/api/booth/{booth_id}/transcription/stop')
-async def api_transcription_stop(booth_id: str):
+async def api_transcription_stop(
+    booth_id: str,
+    token: str = Query(''),
+    credentials: HTTPAuthorizationCredentials | None = Depends(security)
+):
+    _require_access(credentials, token)
     await stop_transcription_worker(booth_id)
     return {"status": "stopped"}
 

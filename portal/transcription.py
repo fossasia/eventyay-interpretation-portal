@@ -7,6 +7,7 @@ import httpx
 import json
 import threading
 from faster_whisper import WhisperModel
+from portal.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -125,7 +126,7 @@ class NVIDIAProvider(TranscriptionProvider):
             
             # The function-id is specific to the model on NIM. 
             # We use the provided parakeet function-id by default.
-            function_id = "d8dd4e9b-fbf5-4fb0-9dba-8cf436c8d965"
+            function_id = settings.nvidia_function_id
             
             auth = rc.Auth(
                 use_ssl=True,
