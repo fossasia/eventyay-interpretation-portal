@@ -8,24 +8,23 @@ from portal.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Lazy load model
-_model = None
+# Lazy load models by size
+_models = {}
 
-def get_model():
-    global _model
-    if _model is None:
-        model_size = settings.whisper_model_size
+def get_model(model_size: str):
+    global _models
+    if model_size not in _models:
         logger.info(f"Loading Whisper model ({model_size}, int8)...")
-        _model = WhisperModel(model_size, device="cpu", compute_type="int8")
-        logger.info("Whisper model loaded.")
-    return _model
+        _models[model_size] = WhisperModel(model_size, device="cpu", compute_type="int8")
+        logger.info(f"Whisper model '{model_size}' loaded.")
+    return _models[model_size]
 
 # Track active tasks so we can cancel them
 active_workers: dict[str, asyncio.Task] = {}
 # Track ffmpeg processes so we can terminate them
 active_processes: dict[str, asyncio.subprocess.Process] = {}
 
-async def transcription_worker(event_slug: str, language_code: str, booth_id: str, broadcast_callback):
+async def transcription_worker(event_slug: str, language_code: str, booth_id: str, broadcast_callback, model_size: str):
     """
     Connects to the RTSP stream using ffmpeg, decodes audio, and runs faster-whisper.
     """
@@ -64,7 +63,7 @@ async def transcription_worker(event_slug: str, language_code: str, booth_id: st
             audio_data = np.frombuffer(chunk, np.int16).astype(np.float32) / 32768.0
             
             # Run inference in a threadpool to not block the async event loop
-            text = await asyncio.to_thread(_run_inference, audio_data, language_code)
+            text = await asyncio.to_thread(_run_inference, audio_data, language_code, model_size)
             
             if text:
                 logger.debug(f"[{booth_id}] Transcribed: {text}")
@@ -88,8 +87,8 @@ async def transcription_worker(event_slug: str, language_code: str, booth_id: st
         active_workers.pop(booth_id, None)
         logger.info(f"[{booth_id}] Transcription worker exited.")
 
-def _run_inference(audio_data: np.ndarray, language_code: str) -> str:
-    model = get_model()
+def _run_inference(audio_data: np.ndarray, language_code: str, model_size: str) -> str:
+    model = get_model(model_size)
     # Provide the language hint
     segments, info = model.transcribe(audio_data, beam_size=5, vad_filter=True, language=language_code)
     
@@ -99,13 +98,13 @@ def _run_inference(audio_data: np.ndarray, language_code: str) -> str:
     
     return text.strip()
 
-async def start_transcription_worker(event_slug: str, language_code: str, booth_id: str, broadcast_callback):
+async def start_transcription_worker(event_slug: str, language_code: str, booth_id: str, broadcast_callback, model_size: str):
     """Start the background task if not already running."""
     if booth_id in active_workers:
         logger.warning(f"Transcription worker for {booth_id} is already running.")
         return
         
-    task = asyncio.create_task(transcription_worker(event_slug, language_code, booth_id, broadcast_callback))
+    task = asyncio.create_task(transcription_worker(event_slug, language_code, booth_id, broadcast_callback, model_size))
     active_workers[booth_id] = task
 
 async def stop_transcription_worker(booth_id: str):

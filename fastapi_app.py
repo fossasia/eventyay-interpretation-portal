@@ -18,7 +18,7 @@ from urllib.parse import urlparse
 
 import httpx
 import jwt as pyjwt
-from fastapi import Body, Depends, FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect, status
+from fastapi import Body, Depends, FastAPI, Form, HTTPException, Query, Request, WebSocket, WebSocketDisconnect, status
 from fastapi.responses import RedirectResponse
 from fastapi.security import HTTPAuthorizationCredentials
 from fastapi.staticfiles import StaticFiles
@@ -1428,6 +1428,62 @@ async def admin_delete_booth(request: Request, event_id: int, room_id: int, boot
     )
 
 
+@app.post(
+    '/admin/events/{event_id}/rooms/{room_id}/booths/{booth_id}/transcription-settings',
+    dependencies=[Depends(require_admin)],
+)
+async def admin_transcription_settings(
+    request: Request,
+    event_id: int,
+    room_id: int,
+    booth_id: int,
+    transcription_enabled: bool | None = Form(False),
+    transcription_model: str = Form('tiny'),
+):
+    from portal.database import get_session, get_booth_by_id, get_event_by_id
+    from portal.booth_identity import make_booth_id
+    from portal.booth_state import booths
+    from portal.transcription import start_transcription_worker, stop_transcription_worker
+
+    async with get_session() as session:
+        db_booth = await get_booth_by_id(session, booth_id)
+        if db_booth is None or db_booth.room_id != room_id:
+            raise HTTPException(status_code=404, detail='Booth not found.')
+            
+        event = await get_event_by_id(session, event_id)
+        if event is None:
+            raise HTTPException(status_code=404, detail='Event not found.')
+            
+        old_enabled = db_booth.transcription_enabled
+        old_model = db_booth.transcription_model
+        
+        # We need to manually update the columns and commit
+        db_booth.transcription_enabled = bool(transcription_enabled)
+        db_booth.transcription_model = transcription_model
+        await session.commit()
+        
+        bid = make_booth_id(event.slug, db_booth.language_code)
+        
+        # Check if booth is live
+        state = booths.get(bid)
+        is_live = state is not None and state.active_publisher_id is not None
+        
+        if is_live:
+            if not transcription_enabled:
+                await stop_transcription_worker(bid)
+                await broadcast_transcription(bid, "")
+            elif old_enabled != transcription_enabled or old_model != transcription_model:
+                await stop_transcription_worker(bid)
+                await broadcast_transcription(bid, "")
+                import asyncio
+                await asyncio.sleep(0.1)
+                await start_transcription_worker(event.slug, db_booth.language_code, bid, broadcast_transcription, transcription_model)
+    return safe_redirect(
+        url=f'/admin/events/{event_id}/rooms/{room_id}/booths/{booth_id}/',
+        status_code=status.HTTP_303_SEE_OTHER,
+    )
+
+
 # ── Admin user management routes ─────────────────────────────────────────────
 
 
@@ -1742,8 +1798,24 @@ async def api_transcription_start(booth_id: str, request: Request):
     if not event_slug or not language_code:
         raise HTTPException(status_code=400, detail="Missing event_slug or language_code")
         
-    await start_transcription_worker(event_slug, language_code, booth_id, broadcast_transcription)
-    return {"status": "started"}
+    from portal.database import get_session
+    from portal.models import DBBooth, Event
+    from sqlalchemy import select
+
+    async with get_session() as session:
+        stmt = select(DBBooth).join(Event).where(
+            Event.slug == event_slug,
+            DBBooth.language_code == language_code
+        )
+        db_booth = await session.scalar(stmt)
+
+        if not db_booth or not db_booth.transcription_enabled:
+            return {"status": "disabled", "message": "Transcription is not enabled for this booth."}
+            
+        model_size = db_booth.transcription_model
+
+    await start_transcription_worker(event_slug, language_code, booth_id, broadcast_transcription, model_size)
+    return {"status": "started", "model": model_size}
 
 @app.post('/api/booth/{booth_id}/transcription/stop')
 async def api_transcription_stop(booth_id: str):

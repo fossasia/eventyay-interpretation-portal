@@ -264,11 +264,15 @@
         captionsWs.onmessage = function(event) {
           try {
             var data = JSON.parse(event.data);
-            if (data.type === 'transcription' && data.text) {
-              var p = document.createElement('p');
-              p.textContent = data.text;
-              captionsBox.appendChild(p);
-              captionsBox.scrollTop = captionsBox.scrollHeight;
+            if (data.type === 'transcription') {
+              if (data.text) {
+                var p = document.createElement('p');
+                p.textContent = data.text;
+                captionsBox.appendChild(p);
+                captionsBox.scrollTop = captionsBox.scrollHeight;
+              } else {
+                captionsBox.innerHTML = '';
+              }
             }
           } catch (e) {
             console.error('Failed to parse caption data', e);
