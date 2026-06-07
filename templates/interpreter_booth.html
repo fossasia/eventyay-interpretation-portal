@@ -229,6 +229,6 @@
 <audio id='relay-audio' autoplay hidden></audio>
 <audio id='booth-audio' autoplay hidden></audio>
 
-<script src="{{ url_for('static', path='js/whep-listener.js') }}"></script>
+<script src="{{ url_for('static', path='js/whep-listener.js') }}?v={{ js_version }}"></script>
 <script type='module' src="{{ url_for('static', path='js/interpreter-booth.js') }}?v={{ js_version }}"></script>
 {% endblock %}
