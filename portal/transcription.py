@@ -21,7 +21,7 @@ def get_model(model_size: str):
         return _current_model
     with _model_lock:
         if _current_model_size != model_size:
-            print(f"Loading faster-whisper model: {model_size}")
+            logger.info(f"Loading faster-whisper model: {model_size}")
             if _current_model is not None:
                 del _current_model
                 import gc
@@ -59,7 +59,7 @@ class LocalProvider(TranscriptionProvider):
 class OpenAIProvider(TranscriptionProvider):
     async def process_chunk(self, chunk: bytes, language_code: str, model_variant: str, api_key: str | None) -> str:
         if not api_key:
-            print(f"OpenAI API key missing")
+            logger.error(f"OpenAI API key missing")
             return ""
         
         wav_data = pcm_to_wav(chunk)
@@ -78,15 +78,15 @@ class OpenAIProvider(TranscriptionProvider):
                 if resp.status_code == 200:
                     return resp.json().get("text", "").strip()
                 else:
-                    print(f"OpenAI error: {resp.text}")
+                    logger.error(f"OpenAI error: {resp.text}")
             except Exception as e:
-                print(f"OpenAI request failed: {e}")
+                logger.error(f"OpenAI request failed: {e}")
         return ""
 
 class DeepgramProvider(TranscriptionProvider):
     async def process_chunk(self, chunk: bytes, language_code: str, model_variant: str, api_key: str | None) -> str:
         if not api_key:
-            print(f"Deepgram API key missing")
+            logger.error(f"Deepgram API key missing")
             return ""
             
         headers = {
@@ -106,15 +106,15 @@ class DeepgramProvider(TranscriptionProvider):
                     except (KeyError, IndexError):
                         pass
                 else:
-                    print(f"Deepgram error: {resp.text}")
+                    logger.error(f"Deepgram error: {resp.text}")
             except Exception as e:
-                print(f"Deepgram request failed: {e}")
+                logger.error(f"Deepgram request failed: {e}")
         return ""
 
 class NVIDIAProvider(TranscriptionProvider):
     async def process_chunk(self, chunk: bytes, language_code: str, model_variant: str, api_key: str | None) -> str:
         if not api_key:
-            print(f"NVIDIA API key missing")
+            logger.error(f"NVIDIA API key missing")
             return ""
             
         def _run_riva():
@@ -153,7 +153,7 @@ class NVIDIAProvider(TranscriptionProvider):
                         text += result.alternatives[0].transcript + " "
                 return text.strip()
             except Exception as e:
-                print(f"NVIDIA API Error: {e}")
+                logger.error(f"NVIDIA API Error: {e}")
                 return ""
                 
         return await asyncio.to_thread(_run_riva)
@@ -161,7 +161,7 @@ class NVIDIAProvider(TranscriptionProvider):
 class ElevenLabsProvider(TranscriptionProvider):
     async def process_chunk(self, chunk: bytes, language_code: str, model_variant: str, api_key: str | None) -> str:
         if not api_key:
-            print(f"ElevenLabs API key missing")
+            logger.error(f"ElevenLabs API key missing")
             return ""
             
         wav_data = pcm_to_wav(chunk)
@@ -180,9 +180,9 @@ class ElevenLabsProvider(TranscriptionProvider):
                 if resp.status_code == 200:
                     return resp.json().get("text", "").strip()
                 else:
-                    print(f"ElevenLabs error: {resp.text}")
+                    logger.error(f"ElevenLabs error: {resp.text}")
             except Exception as e:
-                print(f"ElevenLabs request failed: {e}")
+                logger.error(f"ElevenLabs request failed: {e}")
         return ""
 
 PROVIDERS = {
@@ -198,7 +198,7 @@ active_workers: dict[str, asyncio.Task] = {}
 active_processes: dict[str, asyncio.subprocess.Process] = {}
 
 async def transcription_worker(event_slug: str, language_code: str, booth_id: str, broadcast_callback, provider_name: str, model_size: str, api_key: str | None):
-    print(f"Starting {provider_name} transcription worker for booth {booth_id}")
+    logger.info(f"Starting {provider_name} transcription worker for booth {booth_id}")
     rtsp_url = f"rtsp://mediamtx:8554/{event_slug}/{language_code}"
     
     provider = PROVIDERS.get(provider_name, PROVIDERS['local'])
@@ -232,16 +232,16 @@ async def transcription_worker(event_slug: str, language_code: str, booth_id: st
             text = await provider.process_chunk(chunk, language_code, model_size, api_key)
             
             if text:
-                print(f"[{booth_id}] Transcribed: {text}")
+                logger.info(f"[{booth_id}] Transcribed: {text}")
                 await broadcast_callback(booth_id, text)
                 
     except asyncio.IncompleteReadError:
-        print(f"[{booth_id}] ffmpeg stream ended abruptly.")
+        logger.error(f"[{booth_id}] ffmpeg stream ended abruptly.")
     except asyncio.CancelledError:
-        print(f"[{booth_id}] Transcription worker cancelled.")
+        logger.info(f"[{booth_id}] Transcription worker cancelled.")
         raise
     except Exception as e:
-        print(f"[{booth_id}] Transcription error: {e}")
+        logger.error(f"[{booth_id}] Transcription error: {e}")
     finally:
         if process.returncode is None:
             try:
@@ -251,11 +251,11 @@ async def transcription_worker(event_slug: str, language_code: str, booth_id: st
                 pass
         active_processes.pop(booth_id, None)
         active_workers.pop(booth_id, None)
-        print(f"[{booth_id}] Transcription worker exited.")
+        logger.info(f"[{booth_id}] Transcription worker exited.")
 
 async def start_transcription_worker(event_slug: str, language_code: str, booth_id: str, broadcast_callback, provider: str, model_size: str, api_key: str | None = None):
     if booth_id in active_workers:
-        print(f"Transcription worker for {booth_id} is already running.")
+        logger.info(f"Transcription worker for {booth_id} is already running.")
         return
         
     task = asyncio.create_task(transcription_worker(event_slug, language_code, booth_id, broadcast_callback, provider, model_size, api_key))
@@ -270,7 +270,7 @@ async def stop_transcription_worker(booth_id: str):
         except asyncio.CancelledError:
             pass
         except Exception as e:
-            print(f"Task finished with exception: {e}")
+            logger.error(f"Task finished with exception: {e}")
     
     process = active_processes.get(booth_id)
     if process and process.returncode is None:
