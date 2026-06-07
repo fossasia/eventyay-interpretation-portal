@@ -937,11 +937,12 @@ async def register_submit(request: Request):
 
 
 @app.get('/login')
-async def user_login_page(request: Request):
+async def user_login_page(request: Request, next_url: str = ''):
     current_user = await get_current_user(request)
     if current_user:
-        return safe_redirect(url='/account', status_code=status.HTTP_303_SEE_OTHER)
-    return templates.TemplateResponse(request, 'login.html', {})
+        redirect_to = next_url if next_url and next_url.startswith('/') and not next_url.startswith('//') else '/account'
+        return safe_redirect(url=redirect_to, status_code=status.HTTP_303_SEE_OTHER)
+    return templates.TemplateResponse(request, 'login.html', {'next_url': next_url})
 
 
 @app.post('/login')
@@ -951,6 +952,7 @@ async def user_login_submit(request: Request):
     form = await request.form()
     email = form.get('email', '').strip().lower()
     password = form.get('password', '')
+    next_url = form.get('next_url', '')
 
     async with get_session() as session:
         user = await get_user_by_email(session, email)
@@ -958,18 +960,19 @@ async def user_login_submit(request: Request):
     if user is None or not verify_password(password, user.password_hash):
         return templates.TemplateResponse(
             request, 'login.html',
-            {'error': 'Invalid email or password.', 'email': email},
+            {'error': 'Invalid email or password.', 'email': email, 'next_url': next_url},
             status_code=status.HTTP_403_FORBIDDEN,
         )
     if not user.is_active:
         return templates.TemplateResponse(
             request, 'login.html',
-            {'error': 'Your account has been deactivated. Contact an admin.', 'email': email},
+            {'error': 'Your account has been deactivated. Contact an admin.', 'email': email, 'next_url': next_url},
             status_code=status.HTTP_403_FORBIDDEN,
         )
 
     token = create_user_token(user_id=user.id, email=user.email, display_name=user.display_name, is_admin=user.is_admin)
-    response = RedirectResponse(url='/account', status_code=status.HTTP_303_SEE_OTHER)
+    redirect_to = next_url if next_url and next_url.startswith('/') and not next_url.startswith('//') else '/account'
+    response = RedirectResponse(url=redirect_to, status_code=status.HTTP_303_SEE_OTHER)
     response.set_cookie(
         key='user_token', value=token,
         httponly=True, samesite='lax', max_age=settings.jwt_expiry_seconds,
