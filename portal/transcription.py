@@ -8,16 +8,22 @@ from portal.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Lazy load models by size
-_models = {}
+# Lazy load _current_model_size: str | None = None
+_current_model_size = None
+_current_model = None
 
 def get_model(model_size: str):
-    global _models
-    if model_size not in _models:
-        logger.info(f"Loading Whisper model ({model_size}, int8)...")
-        _models[model_size] = WhisperModel(model_size, device="cpu", compute_type="int8")
-        logger.info(f"Whisper model '{model_size}' loaded.")
-    return _models[model_size]
+    global _current_model_size, _current_model
+    if _current_model_size != model_size:
+        logger.info(f"Loading faster-whisper model: {model_size} (this may take a moment)")
+        if _current_model is not None:
+            del _current_model
+            import gc
+            gc.collect()
+        _current_model = WhisperModel(model_size, device="cpu", compute_type="int8")
+        _current_model_size = model_size
+        logger.info(f"Model {model_size} loaded successfully")
+    return _current_model
 
 # Track active tasks so we can cancel them
 active_workers: dict[str, asyncio.Task] = {}
