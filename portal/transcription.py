@@ -114,8 +114,8 @@ async def stop_transcription_worker(booth_id: str):
         task.cancel()
         try:
             await task
-        except asyncio.CancelledError:
-            pass
+        except Exception as e:
+            logger.debug(f"Task finished with exception: {e}")
     
     # Also kill the ffmpeg process immediately if still lingering
     process = active_processes.get(booth_id)
