@@ -586,6 +586,7 @@ function joinMonitoringFeed() {
       'config.prejoinPageEnabled': 'false',
       'config.disableInitialGUM': 'false',
       'config.disableDeepLinking': 'true',
+      'config.toolbarButtons': '[]',
     })
     
     // Add user info to Jitsi URL config
