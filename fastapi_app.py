@@ -937,11 +937,12 @@ async def register_submit(request: Request):
 
 
 @app.get('/login')
-async def user_login_page(request: Request, next: str = ''):
+async def user_login_page(request: Request, next_url: str = ''):
     current_user = await get_current_user(request)
     if current_user:
-        return safe_redirect(url=next if next and next.startswith('/') else '/account', status_code=status.HTTP_303_SEE_OTHER)
-    return templates.TemplateResponse(request, 'login.html', {'next_url': next})
+        redirect_to = next_url if next_url and next_url.startswith('/') and not next_url.startswith('//') else '/account'
+        return safe_redirect(url=redirect_to, status_code=status.HTTP_303_SEE_OTHER)
+    return templates.TemplateResponse(request, 'login.html', {'next_url': next_url})
 
 
 @app.post('/login')
@@ -970,7 +971,7 @@ async def user_login_submit(request: Request):
         )
 
     token = create_user_token(user_id=user.id, email=user.email, display_name=user.display_name, is_admin=user.is_admin)
-    redirect_to = next_url if next_url and next_url.startswith('/') else '/account'
+    redirect_to = next_url if next_url and next_url.startswith('/') and not next_url.startswith('//') else '/account'
     response = RedirectResponse(url=redirect_to, status_code=status.HTTP_303_SEE_OTHER)
     response.set_cookie(
         key='user_token', value=token,
