@@ -144,43 +144,63 @@ class DeepgramProvider(TranscriptionProvider):
             logger.error(f"Deepgram API key missing")
             return
             
-        url = f"wss://api.deepgram.com/v1/listen?model={model_variant}&language={language_code}&encoding=linear16&sample_rate=16000&channels=1&interim_results=false"
+        url = f"wss://api.deepgram.com/v1/listen?model={model_variant}&language={language_code}&encoding=linear16&sample_rate=16000&channels=1&interim_results=false&keepalive=true"
         headers = {"Authorization": f"Token {api_key}"}
         
-        try:
-            async with websockets.connect(url, extra_headers=headers) as ws:
-                async def sender():
-                    try:
-                        while True:
-                            # Stream in much smaller 4096-byte chunks (fast!)
-                            chunk = await process.stdout.read(4096)
-                            if not chunk:
-                                break
-                            await ws.send(chunk)
-                        await ws.send(json.dumps({"type": "CloseStream"}))
-                    except Exception as e:
-                        logger.error(f"[{booth_id}] Deepgram WS sender error: {e}")
+        consecutive_errors = 0
+        while process.returncode is None:
+            try:
+                async with websockets.connect(url, additional_headers=headers) as ws:
+                    consecutive_errors = 0
+                    
+                    async def sender():
+                        try:
+                            while True:
+                                chunk = await process.stdout.read(4096)
+                                if not chunk:
+                                    return "EOF"
+                                await ws.send(chunk)
+                        except Exception as e:
+                            logger.error(f"[{booth_id}] Deepgram WS sender error: {e}")
+                            return "ERROR"
+                            
+                    async def receiver():
+                        try:
+                            async for msg in ws:
+                                data = json.loads(msg)
+                                if "channel" in data:
+                                    try:
+                                        transcript = data["channel"]["alternatives"][0]["transcript"].strip()
+                                        if transcript:
+                                            logger.debug(f"[{booth_id}] Transcribed: {transcript}")
+                                            await broadcast_callback(booth_id, transcript)
+                                    except (KeyError, IndexError):
+                                        pass
+                        except Exception as e:
+                            logger.error(f"[{booth_id}] Deepgram WS receiver error: {e}")
+                            return "ERROR"
+                            
+                    sender_task = asyncio.create_task(sender())
+                    receiver_task = asyncio.create_task(receiver())
+                    
+                    done, pending = await asyncio.wait(
+                        [sender_task, receiver_task], 
+                        return_when=asyncio.FIRST_COMPLETED
+                    )
+                    
+                    for task in pending:
+                        task.cancel()
                         
-                async def receiver():
-                    try:
-                        async for msg in ws:
-                            data = json.loads(msg)
-                            if "channel" in data:
-                                try:
-                                    transcript = data["channel"]["alternatives"][0]["transcript"].strip()
-                                    if transcript:
-                                        logger.debug(f"[{booth_id}] Transcribed: {transcript}")
-                                        await broadcast_callback(booth_id, transcript)
-                                except (KeyError, IndexError):
-                                    pass
-                    except Exception as e:
-                        logger.error(f"[{booth_id}] Deepgram WS receiver error: {e}")
-                        
-                await asyncio.gather(sender(), receiver())
-                
-        except Exception as e:
-            logger.error(f"[{booth_id}] Deepgram connection failed: {e}")
-            await broadcast_callback(booth_id, "[Transcription provider failed. Check logs.]")
+                    if sender_task in done and sender_task.result() == "EOF":
+                        return # Clean exit
+
+            except Exception as e:
+                consecutive_errors += 1
+                logger.error(f"[{booth_id}] Deepgram connection failed ({consecutive_errors}/3): {e}")
+                if consecutive_errors >= 3:
+                    await broadcast_callback(booth_id, "[Transcription provider failed. Check logs.]")
+                    return
+                await asyncio.sleep(2)
 
 class NVIDIAProvider(TranscriptionProvider):
     def __init__(self):
@@ -231,52 +251,68 @@ class NVIDIAProvider(TranscriptionProvider):
             interim_results=False
         )
         
-        q = queue.Queue(maxsize=100)
-        
-        def audio_generator():
-            while True:
-                chunk = q.get()
-                if chunk is None:
-                    break
-                yield chunk
-                
-        loop = asyncio.get_running_loop()
-        
-        def run_riva_sync():
+        consecutive_errors = 0
+        while process.returncode is None:
             try:
-                responses = asr_service.streaming_recognize(audio_generator(), streaming_config)
-                for response in responses:
-                    if not response.results:
-                        continue
-                    for result in response.results:
-                        if not result.is_final:
-                            continue
-                        if not result.alternatives:
-                            continue
-                        transcript = result.alternatives[0].transcript.strip()
-                        if transcript:
-                            asyncio.run_coroutine_threadsafe(broadcast_callback(booth_id, transcript), loop)
+                q = queue.Queue(maxsize=100)
+                
+                def audio_generator():
+                    while True:
+                        chunk = q.get()
+                        if chunk is None:
+                            break
+                        yield chunk
+                        
+                loop = asyncio.get_running_loop()
+                
+                def run_riva_sync():
+                    try:
+                        responses = asr_service.streaming_recognize(audio_generator(), streaming_config)
+                        for response in responses:
+                            if not response.results:
+                                continue
+                            for result in response.results:
+                                if not result.is_final:
+                                    continue
+                                if not result.alternatives:
+                                    continue
+                                transcript = result.alternatives[0].transcript.strip()
+                                if transcript:
+                                    asyncio.run_coroutine_threadsafe(broadcast_callback(booth_id, transcript), loop)
+                    except Exception as e:
+                        logger.error(f"[{booth_id}] NVIDIA streaming error: {e}")
+                        # Don't broadcast error immediately, let it retry
+                        
+                thread_task = loop.run_in_executor(None, run_riva_sync)
+                
+                consecutive_errors = 0
+                while True:
+                    # Read 4096 byte chunks natively
+                    chunk = await process.stdout.read(4096)
+                    if not chunk:
+                        q.put(None)
+                        await thread_task
+                        return # EOF, cleanly exit
+                    
+                    try:
+                        q.put_nowait(chunk)
+                    except queue.Full:
+                        # Queue is full because thread died or froze, break to reconnect
+                        break
+                        
             except Exception as e:
-                logger.error(f"[{booth_id}] NVIDIA streaming error: {e}")
-                asyncio.run_coroutine_threadsafe(broadcast_callback(booth_id, "[Transcription provider failed. Check logs.]"), loop)
-                
-        thread_task = loop.run_in_executor(None, run_riva_sync)
-        
-        try:
-            while True:
-                # Read 4096 byte chunks natively
-                chunk = await process.stdout.read(4096)
-                if not chunk:
-                    break
-                q.put(chunk)
-        except Exception as e:
-            logger.error(f"[{booth_id}] Stream queue error: {e}")
-        finally:
-            q.put(None)
-            try:
-                await thread_task
-            except Exception:
-                pass
+                consecutive_errors += 1
+                logger.error(f"[{booth_id}] NVIDIA connection failed ({consecutive_errors}/3): {e}")
+                if consecutive_errors >= 3:
+                    await broadcast_callback(booth_id, "[Transcription provider failed. Check logs.]")
+                    return
+                await asyncio.sleep(2)
+            finally:
+                q.put(None)
+                try:
+                    await thread_task
+                except Exception:
+                    pass
 
 class ElevenLabsProvider(TranscriptionProvider):
     async def process_chunk(self, chunk: bytes, language_code: str, model_variant: str, config: ProviderConfig) -> str:
