@@ -129,6 +129,9 @@
           <option value="large-v2" data-provider="local" {% if booth.transcription_model == 'large-v2' %}selected{% endif %}>Local: large-v2</option>
           <option value="large-v3" data-provider="local" {% if booth.transcription_model == 'large-v3' %}selected{% endif %}>Local: large-v3 (Accurate/Slow)</option>
           <option value="whisper-1" data-provider="openai" {% if booth.transcription_model == 'whisper-1' %}selected{% endif %}>OpenAI: whisper-1</option>
+          <option value="gpt-4o-transcribe" data-provider="openai" {% if booth.transcription_model == 'gpt-4o-transcribe' %}selected{% endif %}>OpenAI: gpt-4o-transcribe</option>
+          <option value="gpt-4o-mini-transcribe" data-provider="openai" {% if booth.transcription_model == 'gpt-4o-mini-transcribe' %}selected{% endif %}>OpenAI: gpt-4o-mini-transcribe</option>
+          <option value="gpt-realtime-whisper" data-provider="openai" {% if booth.transcription_model == 'gpt-realtime-whisper' %}selected{% endif %}>OpenAI: gpt-realtime-whisper</option>
           <option value="nova-2" data-provider="deepgram" {% if booth.transcription_model == 'nova-2' %}selected{% endif %}>Deepgram: nova-2</option>
           <option value="parakeet-rnnt" data-provider="nvidia" {% if booth.transcription_model == 'parakeet-rnnt' %}selected{% endif %}>NVIDIA: parakeet-rnnt</option>
           <option value="scribe_v2" data-provider="elevenlabs" {% if booth.transcription_model == 'scribe_v2' %}selected{% endif %}>ElevenLabs: scribe_v2</option>
