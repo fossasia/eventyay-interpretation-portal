@@ -59,6 +59,29 @@ class TranscriptionProvider:
     async def process_chunk(self, chunk: bytes, language_code: str, model_variant: str, config: ProviderConfig) -> str:
         raise NotImplementedError
 
+    async def run_stream(self, process: asyncio.subprocess.Process, language_code: str, model_variant: str, config: ProviderConfig, broadcast_callback, booth_id: str) -> None:
+        consecutive_errors = 0
+        chunk_size_bytes = 16000 * 2 * 3 # 3 seconds
+        
+        while True:
+            chunk = await process.stdout.readexactly(chunk_size_bytes)
+            if not chunk:
+                break
+                
+            try:
+                text = await self.process_chunk(chunk, language_code, model_variant, config)
+                consecutive_errors = 0
+                
+                if text:
+                    logger.debug(f"[{booth_id}] Transcribed: {text}")
+                    await broadcast_callback(booth_id, text)
+            except Exception as e:
+                consecutive_errors += 1
+                logger.error(f"[{booth_id}] Provider error ({consecutive_errors}/3): {e}")
+                if consecutive_errors >= 3:
+                    await broadcast_callback(booth_id, "[Transcription provider failed. Check logs.]")
+                    break
+
 class LocalProvider(TranscriptionProvider):
     async def process_chunk(self, chunk: bytes, language_code: str, model_variant: str, config: ProviderConfig) -> str:
         audio_data = np.frombuffer(chunk, np.int16).astype(np.float32) / 32768.0
@@ -109,95 +132,151 @@ class OpenAIProvider(TranscriptionProvider):
 
 class DeepgramProvider(TranscriptionProvider):
     async def process_chunk(self, chunk: bytes, language_code: str, model_variant: str, config: ProviderConfig) -> str:
+        # Fallback just in case, but run_stream handles it directly now.
+        return ""
+
+    async def run_stream(self, process: asyncio.subprocess.Process, language_code: str, model_variant: str, config: ProviderConfig, broadcast_callback, booth_id: str) -> None:
+        import websockets
+        import json
+        
         api_key = config.get_key()
         if not api_key:
             logger.error(f"Deepgram API key missing")
-            return ""
+            return
             
-        headers = {
-            "Authorization": f"Token {api_key}",
-            "Content-Type": "audio/raw; encoding=linear16; sample_rate=16000; channels=1"
-        }
-        
-        url = f"https://api.deepgram.com/v1/listen?model={model_variant}&language={language_code}&encoding=linear16&sample_rate=16000&channels=1"
+        url = f"wss://api.deepgram.com/v1/listen?model={model_variant}&language={language_code}&encoding=linear16&sample_rate=16000&channels=1&interim_results=false"
+        headers = {"Authorization": f"Token {api_key}"}
         
         try:
-            async for attempt in AsyncRetrying(
-                wait=wait_exponential(multiplier=1, min=2, max=10),
-                stop=stop_after_attempt(3),
-                retry=retry_if_exception_type((httpx.ReadTimeout, httpx.ConnectError, httpx.HTTPStatusError))
-            ):
-                with attempt:
-                    resp = await shared_http_client.post(url, headers=headers, content=chunk)
-                    if resp.status_code in (429, 502, 503, 504):
-                        resp.raise_for_status()
+            async with websockets.connect(url, extra_headers=headers) as ws:
+                async def sender():
+                    try:
+                        while True:
+                            # Stream in much smaller 4096-byte chunks (fast!)
+                            chunk = await process.stdout.read(4096)
+                            if not chunk:
+                                break
+                            await ws.send(chunk)
+                        await ws.send(json.dumps({"type": "CloseStream"}))
+                    except Exception as e:
+                        logger.error(f"[{booth_id}] Deepgram WS sender error: {e}")
                         
-                    if resp.status_code == 200:
-                        data = resp.json()
-                        try:
-                            return data["results"]["channels"][0]["alternatives"][0]["transcript"].strip()
-                        except (KeyError, IndexError):
-                            pass
-                    else:
-                        logger.error(f"Deepgram error status={resp.status_code}")
+                async def receiver():
+                    try:
+                        async for msg in ws:
+                            data = json.loads(msg)
+                            if "channel" in data:
+                                try:
+                                    transcript = data["channel"]["alternatives"][0]["transcript"].strip()
+                                    if transcript:
+                                        logger.debug(f"[{booth_id}] Transcribed: {transcript}")
+                                        await broadcast_callback(booth_id, transcript)
+                                except (KeyError, IndexError):
+                                    pass
+                    except Exception as e:
+                        logger.error(f"[{booth_id}] Deepgram WS receiver error: {e}")
+                        
+                await asyncio.gather(sender(), receiver())
+                
         except Exception as e:
-            logger.error(f"Deepgram request failed: {e}")
-            raise e
-        return ""
+            logger.error(f"[{booth_id}] Deepgram connection failed: {e}")
+            await broadcast_callback(booth_id, "[Transcription provider failed. Check logs.]")
 
 class NVIDIAProvider(TranscriptionProvider):
     def __init__(self):
         self._services = {}
 
     async def process_chunk(self, chunk: bytes, language_code: str, model_variant: str, config: ProviderConfig) -> str:
+        # Fallback just in case, but run_stream handles it directly now.
+        return ""
+
+    async def run_stream(self, process: asyncio.subprocess.Process, language_code: str, model_variant: str, config: ProviderConfig, broadcast_callback, booth_id: str) -> None:
+        import queue
+        import riva.client as rc
+        
         api_key = config.get_key()
         if not api_key:
             logger.error(f"NVIDIA API key missing")
-            return ""
+            return
             
-        def _run_riva():
-            import riva.client as rc
+        riva_lang = "en-US" if language_code == "en" else language_code
+        
+        if api_key not in self._services:
+            from portal.config import settings
+            function_id = settings.nvidia_function_id
             
-            # Map standard language code 'en' to 'en-US' since NVIDIA requires region
-            riva_lang = "en-US" if language_code == "en" else language_code
-            
-            if api_key not in self._services:
-                from portal.config import settings
-                function_id = settings.nvidia_function_id
-                
-                auth = rc.Auth(
-                    use_ssl=True,
-                    uri="grpc.nvcf.nvidia.com:443",
-                    metadata_args=[
-                        ["function-id", function_id],
-                        ["authorization", f"Bearer {api_key}"]
-                    ]
-                )
-                self._services[api_key] = rc.ASRService(auth)
-                
-            asr_service = self._services[api_key]
-            
-            config_rc = rc.RecognitionConfig(
-                encoding=rc.AudioEncoding.LINEAR_PCM,
-                sample_rate_hertz=16000,
-                audio_channel_count=1,
-                language_code=riva_lang,
-                max_alternatives=1,
-                enable_automatic_punctuation=True
+            auth = rc.Auth(
+                use_ssl=True,
+                uri="grpc.nvcf.nvidia.com:443",
+                metadata_args=[
+                    ["function-id", function_id],
+                    ["authorization", f"Bearer {api_key}"]
+                ]
             )
+            self._services[api_key] = rc.ASRService(auth)
             
-            try:
-                response = asr_service.offline_recognize(chunk, config_rc)
-                text = ""
-                for result in response.results:
-                    if result.alternatives:
-                        text += result.alternatives[0].transcript + " "
-                return text.strip()
-            except Exception as e:
-                logger.error(f"NVIDIA API Error: {e}")
-                raise e
+        asr_service = self._services[api_key]
+        
+        config_rc = rc.RecognitionConfig(
+            encoding=rc.AudioEncoding.LINEAR_PCM,
+            sample_rate_hertz=16000,
+            audio_channel_count=1,
+            language_code=riva_lang,
+            max_alternatives=1,
+            enable_automatic_punctuation=True
+        )
+        
+        streaming_config = rc.StreamingRecognitionConfig(
+            config=config_rc,
+            interim_results=False
+        )
+        
+        q = queue.Queue(maxsize=100)
+        
+        def audio_generator():
+            while True:
+                chunk = q.get()
+                if chunk is None:
+                    break
+                yield chunk
                 
-        return await asyncio.to_thread(_run_riva)
+        loop = asyncio.get_running_loop()
+        
+        def run_riva_sync():
+            try:
+                responses = asr_service.streaming_recognize(audio_generator(), streaming_config)
+                for response in responses:
+                    if not response.results:
+                        continue
+                    for result in response.results:
+                        if not result.is_final:
+                            continue
+                        if not result.alternatives:
+                            continue
+                        transcript = result.alternatives[0].transcript.strip()
+                        if transcript:
+                            asyncio.run_coroutine_threadsafe(broadcast_callback(booth_id, transcript), loop)
+            except Exception as e:
+                logger.error(f"[{booth_id}] NVIDIA streaming error: {e}")
+                asyncio.run_coroutine_threadsafe(broadcast_callback(booth_id, "[Transcription provider failed. Check logs.]"), loop)
+                
+        thread_task = loop.run_in_executor(None, run_riva_sync)
+        
+        try:
+            while True:
+                # Read 4096 byte chunks natively
+                chunk = await process.stdout.read(4096)
+                if not chunk:
+                    break
+                q.put(chunk)
+        except Exception as e:
+            logger.error(f"[{booth_id}] Stream queue error: {e}")
+        finally:
+            q.put(None)
+            try:
+                await thread_task
+            except Exception:
+                pass
 
 class ElevenLabsProvider(TranscriptionProvider):
     async def process_chunk(self, chunk: bytes, language_code: str, model_variant: str, config: ProviderConfig) -> str:
@@ -272,29 +351,8 @@ async def transcription_worker(event_slug: str, language_code: str, booth_id: st
     )
     active_processes[booth_id] = process
     
-    consecutive_errors = 0
     try:
-        chunk_size_bytes = 16000 * 2 * 3 # 3 seconds
-        
-        while True:
-            chunk = await process.stdout.readexactly(chunk_size_bytes)
-            if not chunk:
-                break
-                
-            try:
-                text = await provider.process_chunk(chunk, language_code, model_size, config)
-                consecutive_errors = 0
-                
-                if text:
-                    logger.debug(f"[{booth_id}] Transcribed: {text}")
-                    await broadcast_callback(booth_id, text)
-            except Exception as e:
-                consecutive_errors += 1
-                logger.error(f"[{booth_id}] Provider error ({consecutive_errors}/3): {e}")
-                if consecutive_errors >= 3:
-                    await broadcast_callback(booth_id, "[Transcription provider failed. Check logs.]")
-                    break
-                
+        await provider.run_stream(process, language_code, model_size, config, broadcast_callback, booth_id)
     except asyncio.IncompleteReadError:
         logger.error(f"[{booth_id}] ffmpeg stream ended abruptly.")
     except asyncio.CancelledError:
