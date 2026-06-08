@@ -7,23 +7,16 @@ from portal.transcription.providers.base import TranscriptionProvider, ProviderC
 
 logger = logging.getLogger(__name__)
 
-_current_model_size = None
-_current_model = None
+_loaded_models = {}
 _model_lock = threading.Lock()
 
 def get_model(model_size: str):
-    global _current_model_size, _current_model
     with _model_lock:
-        if _current_model_size != model_size:
+        if model_size not in _loaded_models:
             logger.info(f"Loading faster-whisper model: {model_size}")
-            if _current_model is not None:
-                del _current_model
-                import gc
-                gc.collect()
             from faster_whisper import WhisperModel
-            _current_model = WhisperModel(model_size, device="cpu", compute_type="int8")
-            _current_model_size = model_size
-        return _current_model
+            _loaded_models[model_size] = WhisperModel(model_size, device="cpu", compute_type="int8")
+        return _loaded_models[model_size]
 
 class LocalProvider(TranscriptionProvider):
     async def process_chunk(self, chunk: bytes, language_code: str, model_variant: str, config: ProviderConfig) -> str:
