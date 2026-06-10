@@ -13,8 +13,17 @@ const config: Config = {
   organizationName: 'fossasia',
   projectName: 'voxbento',
 
-  onBrokenLinks: 'warn', // Set to warn for now while we fix things
-  onBrokenMarkdownLinks: 'warn',
+  onBrokenLinks: 'warn',
+  
+  markdown: {
+    hooks: {
+      onBrokenMarkdownLinks: 'warn',
+    },
+  },
+
+  future: {
+    v4: true,
+  },
 
   i18n: {
     defaultLocale: 'en',
@@ -26,11 +35,11 @@ const config: Config = {
       'classic',
       {
         docs: {
-          routeBasePath: '/', // Serve the docs at the site's root
+          routeBasePath: '/',
           sidebarPath: './sidebars.ts',
           editUrl: 'https://github.com/fossasia/voxbento/tree/main/docs/',
         },
-        blog: false, // Disable the blog for now
+        blog: false,
         theme: {
           customCss: './src/css/custom.css',
         },

@@ -93,6 +93,44 @@ uv sync --all-groups --python 3.13   # regenerate lock
 git add pyproject.toml uv.lock
 ```
 
+## Contributing to Documentation 
+
+Our documentation is built with [Docusaurus](https://docusaurus.io/) and is located in the `docs/` folder (content) and the root directory (configuration). 
+
+### Running documentation locally 
+
+1.  Navigate to the root directory. 
+2.  Install dependencies: `npm install` 
+3.  Start the dev server: `npm start` 
+4.  The documentation will be available at `http://localhost:3000/voxbento/`. 
+
+### Editing Content 
+
+Documentation is written in [MDX](https://mdxjs.com/). You can find the source files in the `docs/` directory. 
+
+-   **Adding a page:** Create a new `.mdx` file in the appropriate subdirectory of `docs/`. 
+-   **Updating the sidebar:** Edit `sidebars.ts` in the root directory to include your new page. 
+
+### Adding Images 
+
+1.  Place your image files in the `static/img/` directory. 
+2.  Reference the image in your MDX file using standard Markdown syntax: 
+    ```markdown 
+    ![Description](/img/your-image.png) 
+    ``` 
+3.  **Pasting Images:** If you have an image in your clipboard, save it to `static/img/` first, give it a descriptive name (lowercase, hyphens), and then reference it as shown above. 
+
+### Documentation Standards 
+
+-   Use clear, concise language. 
+-   Use Docusaurus [admonitions](https://docusaurus.io/docs/markdown-features/admonitions) for notes, tips, and warnings: 
+    ```markdown 
+    :::note 
+    This is a note. 
+    ::: 
+    ``` 
+-   Ensure all links are relative and functional. 
+
 ## Security
 
 - Never pass user-controlled data to `innerHTML` / `outerHTML` / `document.write`

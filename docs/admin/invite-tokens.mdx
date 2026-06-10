@@ -24,45 +24,36 @@ When a participant opens the join URL, Voxbento validates the token and authenti
 ## When to Use Invite Tokens
 
 ### Guest Interpreters
+Quickly onboard interpreters who don't have a registered account. Generate an interpreter token and share the link — they're live in seconds.
 
-    Quickly onboard interpreters who don't have a registered account. Generate an interpreter token and share the link — they're live in seconds.
-  
+### One-Time Attendees
+For events where listeners don't need persistent accounts, issue listener tokens and distribute them alongside your event registration materials.
 
-  ### One-Time Attendees
+### Coordinator Access
+Give a coordinator temporary access to a specific booth without granting them a full event-level role.
 
-    For events where listeners don't need persistent accounts, issue listener tokens and distribute them alongside your event registration materials.
-  
-
-  ### Coordinator Access
-
-    Give a coordinator temporary access to a specific booth without granting them a full event-level role.
-  
-
-  ### Testing Booths
-
-    Generate a short-lived token to verify a booth is working before the event starts, then revoke it immediately after.
-  
+### Testing Booths
+Generate a short-lived token to verify a booth is working before the event starts, then revoke it immediately after.
 
 ## Generating a Token
 
-### Open the booth detail page
-
+### 1. Open the booth detail page
 In the admin panel, navigate to your event → **Rooms** → select a room → **Booths** → click the booth you want to generate a token for.
-  ### Find the Invite Tokens section
 
+### 2. Find the Invite Tokens section
 Scroll down to the **Invite Tokens** section on the booth detail page.
-  ### Fill in the token form
 
+### 3. Fill in the token form
 Complete the three fields:
 
-    - **Role** — select `listener`, `interpreter`, or `coordinator` from the dropdown.
-    - **Label** — a short note to help you remember who this token is for, e.g. `Alice — French interpreter` or `Press listener seat 12`.
-    - **Expires in (hours)** — how many hours until the token becomes invalid. Leave this blank to create a token that never expires.
-  ### Generate the token
+- **Role** — select `listener`, `interpreter`, or `coordinator` from the dropdown.
+- **Label** — a short note to help you remember who this token is for, e.g. `Alice — French interpreter` or `Press listener seat 12`.
+- **Expires in (hours)** — how many hours until the token becomes invalid. Leave this blank to create a token that never expires.
 
+### 4. Generate the token
 Click **Generate Token**. The new token appears immediately in the table below the form.
-  ### Copy and share the link
 
+### 5. Copy and share the link
 Click **Copy Link** next to the new token. The join URL is now in your clipboard — share it with the intended participant via email, chat, or any secure channel.
 
 ## The Join URL Format

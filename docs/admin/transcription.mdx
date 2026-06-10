@@ -23,11 +23,11 @@ Listeners receive caption messages automatically with no extra configuration. Th
 
 Runs the [faster-whisper](https://github.com/SYSTRAN/faster-whisper) engine directly on your server. No external API call is made, and no API key is required.
 
-    **Models available:** `tiny`, `base`, `small`, `medium`, `large-v2`, `large-v3`
+**Models available:** `tiny`, `base`, `small`, `medium`, `large-v2`, `large-v3`
 
-    Larger models produce more accurate transcriptions but require more CPU and memory. The `base` or `small` models are a good starting point for most deployments.
+Larger models produce more accurate transcriptions but require more CPU and memory. The `base` or `small` models are a good starting point for most deployments.
 
-    :::info
+:::info
 Local Whisper transcription runs entirely on your server with no external API calls. It requires more CPU but has no per-minute cost.
 :::
 
@@ -36,11 +36,11 @@ Local Whisper transcription runs entirely on your server with no external API ca
 
 Uses OpenAI's speech transcription API. Requires an OpenAI API key stored in the event's API settings.
 
-    **Models available:** `whisper-1`, `gpt-4o-realtime-preview`, `gpt-4o-mini-realtime-preview`
+**Models available:** `whisper-1`, `gpt-4o-realtime-preview`, `gpt-4o-mini-realtime-preview`
 
-    The `gpt-4o-realtime-preview` and `gpt-4o-mini-realtime-preview` models use OpenAI's real-time streaming API and deliver very low-latency captions.
+The `gpt-4o-realtime-preview` and `gpt-4o-mini-realtime-preview` models use OpenAI's real-time streaming API and deliver very low-latency captions.
 
-    :::tip
+:::tip
 For the lowest latency captions, use `gpt-4o-realtime-preview` when budget allows.
 :::
 
@@ -49,11 +49,11 @@ For the lowest latency captions, use `gpt-4o-realtime-preview` when budget allow
 
 Uses Deepgram's WebSocket streaming API. Requires a Deepgram API key stored in the event's API settings.
 
-    **Models available:** `nova-2`
+**Models available:** `nova-2`
 
-    Deepgram streams partial and final transcripts over a persistent WebSocket connection, making it one of the fastest options for near-real-time captions.
+Deepgram streams partial and final transcripts over a persistent WebSocket connection, making it one of the fastest options for near-real-time captions.
 
-    :::tip
+:::tip
 For the lowest latency captions, Deepgram `nova-2` (WebSocket streaming) is an excellent choice alongside OpenAI real-time models.
 :::
 
@@ -62,16 +62,16 @@ For the lowest latency captions, Deepgram `nova-2` (WebSocket streaming) is an e
 
 Uses ElevenLabs' `scribe_v2` model. Requires an ElevenLabs API key stored in the event's API settings.
 
-    **Models available:** `scribe_v2`
+**Models available:** `scribe_v2`
 
 </TabItem>
   <TabItem value="nvidia-riva" label="NVIDIA Riva">
 
 Uses NVIDIA's Riva speech recognition service. Requires an NVIDIA API key and the optional `nvidia-riva` Python dependency installed in your environment.
 
-    **Models available:** `parakeet-rnnt`, `parakeet-ctc`
+**Models available:** `parakeet-rnnt`, `parakeet-ctc`
 
-    Best suited for deployments that already operate NVIDIA GPU infrastructure.
+Best suited for deployments that already operate NVIDIA GPU infrastructure.
 
 </TabItem>
 </Tabs>
