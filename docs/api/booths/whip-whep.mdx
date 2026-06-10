@@ -21,25 +21,21 @@ The WHIP URL is the endpoint your interpreter client POSTs a WebRTC SDP offer to
 
 Both WHIP URL endpoints require a Bearer token. See the [Authentication guide](/api/authentication) for details on obtaining a token.
 
-<Warning>
-  This endpoint enforces the active-interpreter rule. Only the participant currently designated as the active interpreter receives a successful response. All other callers receive `403 Forbidden`.
-</Warning>
+:::warning
+This endpoint enforces the active-interpreter rule. Only the participant currently designated as the active interpreter receives a successful response. All other callers receive `403 Forbidden`.
+:::
 
 ### Path Parameters
 
-<ParamField path="event_slug" type="string" required>
-  The event's URL slug, e.g. `pycon2026`.
-</ParamField>
+**`event_slug`** *(string)* — The event's URL slug, e.g. `pycon2026`.
 
-<ParamField path="language_code" type="string" required>
-  ISO 639-1 two-letter language code in lowercase, e.g. `en`.
-</ParamField>
+**`language_code`** *(string)* — ISO 639-1 two-letter language code in lowercase, e.g. `en`.
 
 ### Query Parameters
 
-<ParamField query="participant_id" type="string" required>
+
   The caller's participant ID. This is validated server-side against the booth's current active interpreter record.
-</ParamField>
+
 
 ### Example Request
 
@@ -60,17 +56,11 @@ curl https://voxbento.com/api/events/pycon2026/booths/en/whip-url \
 
 ### Response Fields
 
-<ResponseField name="whip_url" type="string">
-  The full WHIP ingest URL. POST a WebRTC SDP offer to this URL to begin publishing audio.
-</ResponseField>
+**`whip_url`** *(string)* — The full WHIP ingest URL. POST a WebRTC SDP offer to this URL to begin publishing audio.
 
-<ResponseField name="channel_id" type="string">
-  The media channel path for this booth, in the format `{event_slug}/{language_code}`.
-</ResponseField>
+**`channel_id`** *(string)* — The media channel path for this booth, in the format `{event_slug}/{language_code}`.
 
-<ResponseField name="booth_id" type="string">
-  The canonical booth identifier, in the format `{event_slug}-{language_code}`.
-</ResponseField>
+**`booth_id`** *(string)* — The canonical booth identifier, in the format `{event_slug}-{language_code}`.
 
 ---
 
@@ -92,9 +82,9 @@ https://voxbento.com/pycon2026/en/whep
 
 To start a WHEP session, send a `POST` request to the WHEP URL with a WebRTC SDP offer body. The response contains the SDP answer, and the `Location` response header provides the session resource URL for subsequent ICE candidate exchanges and teardown.
 
-<Tip>
-  Build your custom listener by POSTing a WebRTC SDP offer to the WHEP URL. The response body contains the SDP answer. Use the returned `Location` header for the session resource URL to send ICE candidates and eventually DELETE the session when playback ends.
-</Tip>
+:::tip
+Build your custom listener by POSTing a WebRTC SDP offer to the WHEP URL. The response body contains the SDP answer. Use the returned `Location` header for the session resource URL to send ICE candidates and eventually DELETE the session when playback ends.
+:::
 
 ---
 
@@ -114,9 +104,7 @@ No authentication required. Use this as a lightweight preflight check before ini
 
 ### Path Parameters
 
-<ParamField path="channel_id" type="string" required>
-  The channel path in the format `{event_slug}/{language_code}`, e.g. `pycon2026/en`. Note that this parameter uses a forward slash, not a hyphen.
-</ParamField>
+**`channel_id`** *(string)* — The channel path in the format `{event_slug}/{language_code}`, e.g. `pycon2026/en`. Note that this parameter uses a forward slash, not a hyphen.
 
 ### Example Request
 
@@ -136,17 +124,11 @@ curl https://voxbento.com/api/interpreter/status/pycon2026/en
 
 ### Response Fields
 
-<ResponseField name="channel_id" type="string">
-  The channel ID that was checked, echoed back from the request path.
-</ResponseField>
+**`channel_id`** *(string)* — The channel ID that was checked, echoed back from the request path.
 
-<ResponseField name="state" type="string">
-  A descriptive state label. Returns `"mediamtx"` when the check runs successfully.
-</ResponseField>
+**`state`** *(string)* — A descriptive state label. Returns `"mediamtx"` when the check runs successfully.
 
-<ResponseField name="reachable" type="boolean">
-  `true` if the media server responded within the timeout window, `false` if it was unreachable or timed out.
-</ResponseField>
+**`reachable`** *(boolean)* — `true` if the media server responded within the timeout window, `false` if it was unreachable or timed out.
 
 ---
 

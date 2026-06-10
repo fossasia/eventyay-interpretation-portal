@@ -10,23 +10,25 @@ Voxbento brings professional simultaneous interpretation to any live event direc
 
 Voxbento serves four distinct groups at every event:
 
-<CardGroup cols={2}>
-  <Card title="Event Organizers" icon="calendar">
+### Event Organizers
+
     Create events, rooms, and language booths from the admin panel. Assign roles, generate invite tokens, and monitor live booth status from a single dashboard.
-  </Card>
+  
 
-  <Card title="Interpreters" icon="microphone">
+  ### Interpreters
+
     Open a booth link in any modern browser, monitor floor audio through an embedded Jitsi window, and go live with one click — no headset drivers, no plugin installs.
-  </Card>
+  
 
-  <Card title="Coordinators" icon="sliders">
+  ### Coordinators
+
     Manage interpreter handoffs in real time. Switch the active interpreter for a booth without disconnecting a single listener.
-  </Card>
+  
 
-  <Card title="Listeners / Attendees" icon="headphones">
+  ### Listeners / Attendees
+
     Visit the listener page for an event, choose a language, and hear the interpreted audio stream instantly via WebRTC — or fall back to HLS on older devices.
-  </Card>
-</CardGroup>
+  
 
 ## Key Capabilities
 
@@ -49,26 +51,28 @@ The pipeline that carries interpretation audio never touches the Python server. 
 
 The Voxbento coordination portal handles booth state, participant rosters, handoff signals, invite tokens, and captions — but is never in the audio path itself.
 
-<Note>
-  Python is never in the audio path. MediaMTX handles all WebRTC termination and playback directly between browsers.
-</Note>
+:::info
+Python is never in the audio path. MediaMTX handles all WebRTC termination and playback directly between browsers.
+:::
 
 ## Explore Voxbento
 
-<CardGroup cols={2}>
-  <Card title="Quickstart" icon="rocket" href="/quickstart">
+### [Quickstart](/quickstart)
+
     Set up your first event and get an interpreter live in under ten minutes.
-  </Card>
+  
 
-  <Card title="How It Works" icon="diagram-project" href="/how-it-works">
+  ### [How It Works](/how-it-works)
+
     Understand the full WebRTC pipeline from interpreter mic to listener playback.
-  </Card>
+  
 
-  <Card title="Events & Rooms" icon="folder-open" href="/admin/events-and-rooms">
+  ### [Events & Rooms](/admin/events-and-rooms)
+
     Learn how to create and manage events, rooms, and language booths.
-  </Card>
+  
 
-  <Card title="API Overview" icon="code" href="/api/overview">
+  ### [API Overview](/api/overview)
+
     Explore the REST and WebSocket APIs that power Voxbento's coordination layer.
-  </Card>
-</CardGroup>
+  

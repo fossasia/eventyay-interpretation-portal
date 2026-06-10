@@ -4,6 +4,10 @@ sidebarTitle: "Security"
 description: "Secure your Voxbento deployment by setting strong secrets, enabling TLS, practicing good token hygiene, and following least-privilege role assignment."
 ---
 
+import Tabs from "@theme/Tabs";
+import TabItem from "@theme/TabItem";
+
+
 Securing your Voxbento deployment involves more than setting a strong admin password. You need to protect secrets at rest, encrypt media in transit, limit what each user can do, and keep invite tokens under active management. This page walks you through the key controls available to you as a self-hosted operator.
 
 ## Secrets Checklist
@@ -16,9 +20,9 @@ Before exposing your Voxbento instance to the internet, verify each of the follo
 - Change `JVB_AUTH_PASSWORD` and `JICOFO_AUTH_PASSWORD` from `changeme` to strong random values
 - Never commit `.env` to source control — add it to `.gitignore` and use environment variable injection in your deployment platform instead
 
-<Warning>
-  The default `SECRET_KEY` value is `change-me`, which is publicly known. Any deployment that ships with this value can have its JWT session tokens forged by anyone who knows it. Generate a new key before accepting any user sessions.
-</Warning>
+:::warning
+The default `SECRET_KEY` value is `change-me`, which is publicly known. Any deployment that ships with this value can have its JWT session tokens forged by anyone who knows it. Generate a new key before accepting any user sessions.
+:::
 
 ## TLS and HTTPS
 
@@ -27,8 +31,9 @@ WebRTC requires a secure context (HTTPS or localhost) to access microphone hardw
 Use a reverse proxy such as [Caddy](https://caddyserver.com/) or nginx with [Let's Encrypt](https://letsencrypt.org/) to terminate TLS in front of your services:
 
 <Tabs>
-  <Tab title="Caddy">
-    ```caddy
+  <TabItem value="caddy" label="Caddy">
+
+```caddy
     your-domain.com {
         reverse_proxy localhost:8000
     }
@@ -39,9 +44,11 @@ Use a reverse proxy such as [Caddy](https://caddyserver.com/) or nginx with [Let
     ```
 
     Caddy provisions and renews Let's Encrypt certificates automatically. No additional configuration is needed for HTTPS.
-  </Tab>
-  <Tab title="nginx">
-    ```nginx
+
+</TabItem>
+  <TabItem value="nginx" label="nginx">
+
+```nginx
     server {
         listen 443 ssl;
         server_name your-domain.com;
@@ -61,7 +68,8 @@ Use a reverse proxy such as [Caddy](https://caddyserver.com/) or nginx with [Let
     ```
 
     Use `certbot --nginx` to obtain and install a Let's Encrypt certificate automatically.
-  </Tab>
+
+</TabItem>
 </Tabs>
 
 After setting up TLS, update `MEDIAMTX_WHIP_BASE` in your `.env` to use `https://` — the portal injects this URL into interpreter booth pages, so it must be the browser-reachable HTTPS address.
@@ -75,9 +83,9 @@ Invite tokens are the primary way interpreters and listeners join a booth withou
 - **Prefer registered user accounts and event memberships for recurring interpreters.** A named account with an assigned role is easier to audit and revoke than a static token shared over email or chat.
 - **Use descriptive labels.** When generating a token, fill in the **Label** field (e.g. `Alice — Spanish interpreter, Day 1`). This makes it straightforward to identify and revoke specific tokens later.
 
-<Tip>
-  You can revoke a token at any time from the booth detail page by clicking **Revoke** next to the token entry. Revoked tokens are marked and immediately stop working — there is no delay.
-</Tip>
+:::tip
+You can revoke a token at any time from the booth detail page by clicking **Revoke** next to the token entry. Revoked tokens are marked and immediately stop working — there is no delay.
+:::
 
 ## Role Scoping
 
@@ -90,9 +98,9 @@ Roles in Voxbento are scoped per event, and each role carries a distinct set of 
 | `coordinator` | All listener permissions, plus go live, assign the active interpreter, and manage handoffs |
 | `event_admin` | All coordinator permissions, plus manage booths and generate invite tokens |
 
-<Tip>
-  Assign `interpreter` to interpreters, `coordinator` only to the booth coordinator managing handoffs, and `event_admin` only to the person responsible for setting up the event. Listeners do not need any elevated role.
-</Tip>
+:::tip
+Assign `interpreter` to interpreters, `coordinator` only to the booth coordinator managing handoffs, and `event_admin` only to the person responsible for setting up the event. Listeners do not need any elevated role.
+:::
 
 To remove a role, go to the event or booth detail page, find the user in the **Members** section, and click **Remove**.
 
@@ -102,30 +110,28 @@ If you use cloud transcription providers, Voxbento stores their API keys encrypt
 
 Voxbento supports zero-downtime rotation by accepting a comma-separated list of keys in `API_KEY_ENCRYPTION_KEY`:
 
-<Steps>
-  <Step title="Generate a new encryption key">
-    ```bash
+### Generate a new encryption key
+
+```bash
     openssl rand -hex 32
     ```
-  </Step>
-  <Step title="Prepend the new key to your existing key">
-    Set the variable to `NEW_KEY,OLD_KEY` in your `.env`. The first key is used for all new encryptions; all keys are tried for decryption. Existing data continues to work.
+  ### Prepend the new key to your existing key
+
+Set the variable to `NEW_KEY,OLD_KEY` in your `.env`. The first key is used for all new encryptions; all keys are tried for decryption. Existing data continues to work.
 
     ```bash
     API_KEY_ENCRYPTION_KEY=new-key-here,old-key-here
     ```
-  </Step>
-  <Step title="Redeploy and re-encrypt">
-    Restart your services with the updated variable. Then trigger a re-encryption of all stored API keys so they are migrated to the new key.
-  </Step>
-  <Step title="Remove the old key">
-    Once all stored keys have been re-encrypted, update `API_KEY_ENCRYPTION_KEY` to contain only the new key and redeploy.
+  ### Redeploy and re-encrypt
+
+Restart your services with the updated variable. Then trigger a re-encryption of all stored API keys so they are migrated to the new key.
+  ### Remove the old key
+
+Once all stored keys have been re-encrypted, update `API_KEY_ENCRYPTION_KEY` to contain only the new key and redeploy.
 
     ```bash
     API_KEY_ENCRYPTION_KEY=new-key-here
     ```
-  </Step>
-</Steps>
 
 ## WebRTC Security
 
@@ -140,6 +146,6 @@ webrtcAllowOrigins:
 
 Setting `webrtcEncryption: yes` enables DTLS-SRTP, which encrypts the audio stream between the browser and MediaMTX. Setting `webrtcAllowOrigins` restricts which origins (domains) may initiate WHIP/WHEP connections, preventing unauthorized sites from embedding or accessing your media endpoints.
 
-<Warning>
-  WebRTC audio streams are **not encrypted by default** in local development. Always enable DTLS-SRTP (`webrtcEncryption: yes`) in production to prevent audio from being intercepted on the network.
-</Warning>
+:::warning
+WebRTC audio streams are **not encrypted by default** in local development. Always enable DTLS-SRTP (`webrtcEncryption: yes`) in production to prevent audio from being intercepted on the network.
+:::

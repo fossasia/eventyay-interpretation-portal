@@ -10,9 +10,9 @@ The Voxbento admin panel gives you full control over the hierarchy of your live 
 
 You can reach the admin panel at `/admin/`. If you haven't already authenticated, navigate to `/admin/login` and enter the `ADMIN_PASSWORD` you configured in your environment. Successful login sets a session cookie that grants access to all admin routes.
 
-<Note>
-  The admin panel also accepts login via a registered user account that has been granted site-wide admin access. These users share the same panel access as the `ADMIN_PASSWORD` login.
-</Note>
+:::info
+The admin panel also accepts login via a registered user account that has been granted site-wide admin access. These users share the same panel access as the `ADMIN_PASSWORD` login.
+:::
 
 ## Dashboard Overview
 
@@ -30,68 +30,62 @@ Every piece of content in Voxbento hangs off a strict three-level hierarchy:
 
 ## Creating an Event
 
-<Steps>
-  <Step title="Open the Events list">
-    From the dashboard, click **Events** in the admin navigation, or go directly to `/admin/events/`.
-  </Step>
-  <Step title="Fill in the event details">
-    Enter a **slug** and a **display name** in the creation form.
+### Open the Events list
+
+From the dashboard, click **Events** in the admin navigation, or go directly to `/admin/events/`.
+  ### Fill in the event details
+
+Enter a **slug** and a **display name** in the creation form.
 
     - **Slug** — URL-safe identifier: lowercase alphanumeric characters and hyphens only, maximum 64 characters. For example: `pycon2026`, `summit-2026`, `open-source-day`. Choose it carefully — the slug appears in every booth URL and invite link you share.
     - **Display name** — the human-readable label shown on the home page and in the dashboard.
-  </Step>
-  <Step title="Submit">
-    Click **Create Event**. You are redirected to the new event's detail page.
-  </Step>
-  <Step title="Add rooms">
-    From the event detail page, proceed to create rooms as described in the next section.
-  </Step>
-</Steps>
+  ### Submit
 
-<Note>
-  Each event has a unique slug used in all URLs. Choose it carefully — changing it later requires updating all shared links.
-</Note>
+Click **Create Event**. You are redirected to the new event's detail page.
+  ### Add rooms
+
+From the event detail page, proceed to create rooms as described in the next section.
+
+:::info
+Each event has a unique slug used in all URLs. Choose it carefully — changing it later requires updating all shared links.
+:::
 
 ## Creating a Room
 
 Rooms represent physical or logical spaces within your event — typically one room per stage or conference track. Each room can contain multiple language booths.
 
-<Steps>
-  <Step title="Open the event">
-    Navigate to `/admin/events/` and click the event you want to add a room to.
-  </Step>
-  <Step title="Go to Rooms">
-    Click **Rooms** on the event detail page, or navigate to `/admin/events/{event_id}/rooms/`.
-  </Step>
-  <Step title="Enter the room name">
-    Type the room name into the **Add Room** form — for example, `Main Stage` or `Track B`.
-  </Step>
-  <Step title="Submit">
-    Click **Add Room**. Voxbento automatically generates a Jitsi Meet URL for the room based on your configured `JITSI_DOMAIN`.
-  </Step>
-</Steps>
+### Open the event
+
+Navigate to `/admin/events/` and click the event you want to add a room to.
+  ### Go to Rooms
+
+Click **Rooms** on the event detail page, or navigate to `/admin/events/{event_id}/rooms/`.
+  ### Enter the room name
+
+Type the room name into the **Add Room** form — for example, `Main Stage` or `Track B`.
+  ### Submit
+
+Click **Add Room**. Voxbento automatically generates a Jitsi Meet URL for the room based on your configured `JITSI_DOMAIN`.
 
 ## Editing a Room
 
 After creation you can update a room's Jitsi URL or set its relay booth ID. This is useful if you need to point the room at a different Jitsi conference or configure audio relay between booths.
 
-<Steps>
-  <Step title="Open the room">
-    From the event detail page, click the room you want to edit.
-  </Step>
-  <Step title="Edit room settings">
-    On the room detail page, update the **Jitsi URL** field to a custom meeting link, or set the **Relay Booth ID** to specify which booth should act as the relay source.
-  </Step>
-  <Step title="Save">
-    Click **Save** on the room detail page to apply your changes.
-  </Step>
-</Steps>
+### Open the room
+
+From the event detail page, click the room you want to edit.
+  ### Edit room settings
+
+On the room detail page, update the **Jitsi URL** field to a custom meeting link, or set the **Relay Booth ID** to specify which booth should act as the relay source.
+  ### Save
+
+Click **Save** on the room detail page to apply your changes.
 
 ## Deleting Events and Rooms
 
-<Warning>
-  Deleting an event or room is **permanent and irreversible** — all nested records are removed along with it. For an event, this includes all rooms, booths, members, invite tokens, and transcription settings.
-</Warning>
+:::warning
+Deleting an event or room is **permanent and irreversible** — all nested records are removed along with it. For an event, this includes all rooms, booths, members, invite tokens, and transcription settings.
+:::
 
 - **Delete an event** — open the event detail page and click **Delete Event**. All rooms, booths, memberships, and tokens under the event are removed.
 - **Delete a room** — open the room detail page and click **Delete Room**. All booths inside the room, along with their members and tokens, are removed.

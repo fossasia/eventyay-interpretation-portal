@@ -64,26 +64,28 @@ A healthy response looks like this:
 
 If `mediamtx_ok` is `false`, interpreter ingest and listener playback will be unavailable even if the portal itself is running.
 
-<Note>
-  Use `mediamtx_ok` to determine whether the media server is reachable before starting a stream. If it is `false`, check the MediaMTX service logs on your deployment.
-</Note>
+:::info
+Use `mediamtx_ok` to determine whether the media server is reachable before starting a stream. If it is `false`, check the MediaMTX service logs on your deployment.
+:::
 
 ## Explore the API
 
-<CardGroup cols={2}>
-  <Card title="Authentication" icon="key" href="/api/authentication">
+### [Authentication](/api/authentication)
+
     Learn how to obtain a bearer JWT and include it in your API requests.
-  </Card>
+  
 
-  <Card title="Booth State" icon="signal" href="/api/booths/state">
+  ### [Booth State](/api/booths/state)
+
     Query the live state of any interpreter booth, including participant list and active interpreter.
-  </Card>
+  
 
-  <Card title="WHIP & WHEP URLs" icon="broadcast-tower" href="/api/booths/whip-whep">
+  ### [WHIP & WHEP URLs](/api/booths/whip-whep)
+
     Retrieve the WHIP ingest and WHEP playback URLs for a booth's audio channel.
-  </Card>
+  
 
-  <Card title="Events & Booths" icon="calendar" href="/api/booths/events">
+  ### [Events & Booths](/api/booths/events)
+
     Create and list in-memory booths scoped to a specific event slug.
-  </Card>
-</CardGroup>
+  

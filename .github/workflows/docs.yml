@@ -6,6 +6,13 @@ on:
       - main
     paths:
       - "docs/**"
+      - "src/**"
+      - "static/**"
+      - "docusaurus.config.ts"
+      - "sidebars.ts"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/docs.yml"
 
 permissions:
   contents: read
@@ -28,26 +35,21 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
 
-      - name: Install Mintlify
-        run: npm install -g mintlify
+      - name: Install dependencies
+        run: npm ci
 
-      - name: Export Docs
-        working-directory: docs
-        run: mintlify export
+      - name: Build docs
+        run: npm run build
 
-      - name: Unzip Export
-        working-directory: docs
-        run: unzip export.zip -d site
-
-      - name: Upload Pages Artifact
+      - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: docs/site
+          path: build
 
   deploy:
     needs: build
-
     runs-on: ubuntu-latest
 
     environment:
@@ -55,6 +57,6 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
-      - name: Deploy
+      - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4

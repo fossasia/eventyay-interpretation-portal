@@ -38,56 +38,52 @@ The table below shows which actions each role can perform within a booth or even
 
 Roles in Voxbento are always **per-event**, not global. A user you assign as an interpreter for `pycon2026` has no special permissions on any other event. This design lets you safely reuse the same user accounts across multiple events without worrying about permission bleed.
 
-<Tip>
-  For interpreters who cover multiple events, assigning them at the event level saves time versus booth-by-booth assignment. Event-level roles apply to all booths within that event.
-</Tip>
+:::tip
+For interpreters who cover multiple events, assigning them at the event level saves time versus booth-by-booth assignment. Event-level roles apply to all booths within that event.
+:::
 
 ## Assigning Event-Level Roles
 
 Use event-level role assignment when a user needs access to an entire event — for example, a coordinator who manages multiple rooms, or an interpreter who will work across several booths.
 
-<Steps>
-  <Step title="Open the admin panel">
-    Log in at `/admin/login` and navigate to `/admin/events/`.
-  </Step>
-  <Step title="Open the event">
-    Click the event you want to manage.
-  </Step>
-  <Step title="Go to Manage Members">
-    Click **Manage Members** on the event detail page, or navigate to `/admin/events/{event_id}/members/`.
-  </Step>
-  <Step title="Enter the user's email">
-    In the **Assign Member** form, type the registered email address of the user you want to add.
-  </Step>
-  <Step title="Select a role">
-    Choose the appropriate role from the dropdown — `listener`, `interpreter`, `coordinator`, or `event_admin`.
-  </Step>
-  <Step title="Submit">
-    Click **Assign Role**. The user now appears in the members list and gains the selected permissions for the entire event.
-  </Step>
-</Steps>
+### Open the admin panel
+
+Log in at `/admin/login` and navigate to `/admin/events/`.
+  ### Open the event
+
+Click the event you want to manage.
+  ### Go to Manage Members
+
+Click **Manage Members** on the event detail page, or navigate to `/admin/events/{event_id}/members/`.
+  ### Enter the user's email
+
+In the **Assign Member** form, type the registered email address of the user you want to add.
+  ### Select a role
+
+Choose the appropriate role from the dropdown — `listener`, `interpreter`, `coordinator`, or `event_admin`.
+  ### Submit
+
+Click **Assign Role**. The user now appears in the members list and gains the selected permissions for the entire event.
 
 ## Assigning Booth-Level Roles
 
 For stricter access control, you can assign a user to a specific booth rather than the whole event. This is useful when an interpreter should only access one language channel and should not see other booths.
 
-<Steps>
-  <Step title="Navigate to the booth">
-    From the admin panel, go to your event → **Rooms** → select a room → **Booths** → open the target booth.
-  </Step>
-  <Step title="Scroll to Assigned Members">
-    Find the **Assigned Members** section on the booth detail page.
-  </Step>
-  <Step title="Enter the user's email">
-    Under **Assign Member**, type the registered email address of the user.
-  </Step>
-  <Step title="Select a role">
-    Choose a role from the dropdown — typically `interpreter` for booth-level assignments.
-  </Step>
-  <Step title="Submit">
-    Click **Assign Member**. When the interpreter logs in, they will see an **Open Booth** button on their home dashboard that links directly to this booth.
-  </Step>
-</Steps>
+### Navigate to the booth
+
+From the admin panel, go to your event → **Rooms** → select a room → **Booths** → open the target booth.
+  ### Scroll to Assigned Members
+
+Find the **Assigned Members** section on the booth detail page.
+  ### Enter the user's email
+
+Under **Assign Member**, type the registered email address of the user.
+  ### Select a role
+
+Choose a role from the dropdown — typically `interpreter` for booth-level assignments.
+  ### Submit
+
+Click **Assign Member**. When the interpreter logs in, they will see an **Open Booth** button on their home dashboard that links directly to this booth.
 
 ## Removing a Role
 
@@ -103,14 +99,23 @@ The change takes effect immediately. The user loses the associated permissions o
 
 The **Users** page at `/admin/users/` lists all registered users and exposes account-level controls that are separate from event roles:
 
-<Accordion title="Admin badge">
-  Users with the **Admin** badge have site-wide admin panel access — equivalent to logging in with `ADMIN_PASSWORD`. You can toggle this flag from the user detail page at `/admin/users/{user_id}/` using the **Toggle Admin** action.
-</Accordion>
+<details>
+<summary>Admin badge</summary>
 
-<Accordion title="Active / Deactivated status">
-  The **Status** column shows whether a user can log in. Clicking **Deactivate** immediately prevents the user from authenticating. Click **Activate** to restore access. Deactivated users who are already logged in will be rejected on their next authenticated request.
-</Accordion>
+Users with the **Admin** badge have site-wide admin panel access — equivalent to logging in with `ADMIN_PASSWORD`. You can toggle this flag from the user detail page at `/admin/users/{user_id}/` using the **Toggle Admin** action.
 
-<Accordion title="Deleting a user">
-  Clicking **Delete** on the user detail page permanently removes the account and all associated memberships. This cannot be undone. Consider deactivating the account instead if you may need to restore access later.
-</Accordion>
+</details>
+
+<details>
+<summary>Active / Deactivated status</summary>
+
+The **Status** column shows whether a user can log in. Clicking **Deactivate** immediately prevents the user from authenticating. Click **Activate** to restore access. Deactivated users who are already logged in will be rejected on their next authenticated request.
+
+</details>
+
+<details>
+<summary>Deleting a user</summary>
+
+Clicking **Delete** on the user detail page permanently removes the account and all associated memberships. This cannot be undone. Consider deactivating the account instead if you may need to restore access later.
+
+</details>
