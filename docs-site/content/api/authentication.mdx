@@ -4,6 +4,8 @@ sidebarTitle: "Authentication"
 description: "Obtain a short-lived bearer JWT from the Voxbento token endpoint and attach it to every REST API request using the Authorization header."
 ---
 
+import { Callout } from 'nextra/components'
+
 The Voxbento API uses bearer token authentication. You call the token endpoint once with your booth access token, receive a signed JWT in return, and then include that JWT as an `Authorization: Bearer {token}` header on every subsequent request. Tokens expire after 24 hours by default, at which point you request a fresh one.
 
 ## Obtaining a Token
@@ -35,8 +37,6 @@ POST /api/auth/token
 
 **Example request**
 
-<CodeGroup>
-
 ```bash cURL
 curl -X POST https://voxbento.com/api/auth/token \
   -H 'Content-Type: application/json' \
@@ -62,11 +62,9 @@ const response = await fetch("https://voxbento.com/api/auth/token", {
 const { access_token } = await response.json();
 ```
 
-</CodeGroup>
-
-<Note>
+<Callout type="info">
   The `BOOTH_ACCESS_TOKEN` is set by your Voxbento instance operator. Contact your operator if you need API access.
-</Note>
+</Callout>
 
 ## Using the Token
 
@@ -87,9 +85,9 @@ Store the token in a secure location such as an environment variable or a secret
 
 ## Token Lifetime
 
-<Tip>
+<Callout type="info">
   Request a new token proactively before your current one expires to avoid a gap in service. Checking the response status on each request and refreshing on a `401` is a safe fallback strategy.
-</Tip>
+</Callout>
 
 Tokens expire after 86400 seconds (24 hours) by default. Your operator can adjust this value for your deployment. When a token expires, the API returns a `401 Unauthorized` response — simply call `POST /api/auth/token` again to obtain a fresh token and retry the original request.
 

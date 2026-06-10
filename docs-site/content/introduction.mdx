@@ -4,7 +4,7 @@ sidebarTitle: "Introduction"
 description: "Voxbento is a browser-first real-time interpretation platform — zero installs, sub-second WebRTC audio, multi-language booths, and live captions."
 ---
 
-import { Cards, Card, Callout } from 'nextra/components'
+import { Cards, Callout } from 'nextra/components'
 
 Voxbento brings professional simultaneous interpretation to any live event directly inside the browser. Whether you are running a global conference, a hybrid town hall, or a multi-track summit, Voxbento lets interpreters monitor floor audio, speak into their microphone, and reach listeners in sub-second time — all without asking anyone to install software or browser extensions.
 
@@ -12,23 +12,21 @@ Voxbento brings professional simultaneous interpretation to any live event direc
 
 Voxbento serves four distinct groups at every event:
 
-<Cards>
-  <Card title="Event Organizers">
-    Create events, rooms, and language booths from the admin panel. Assign roles, generate invite tokens, and monitor live booth status from a single dashboard.
-  </Card>
+**Event Organizers**
 
-  <Card title="Interpreters">
-    Open a booth link in any modern browser, monitor floor audio through an embedded Jitsi window, and go live with one click — no headset drivers, no plugin installs.
-  </Card>
+Create events, rooms, and language booths from the admin panel. Assign roles, generate invite tokens, and monitor live booth status from a single dashboard.
 
-  <Card title="Coordinators">
-    Manage interpreter handoffs in real time. Switch the active interpreter for a booth without disconnecting a single listener.
-  </Card>
+**Interpreters**
 
-  <Card title="Listeners / Attendees">
-    Visit the listener page for an event, choose a language, and hear the interpreted audio stream instantly via WebRTC — or fall back to HLS on older devices.
-  </Card>
-</Cards>
+Open a booth link in any modern browser, monitor floor audio through an embedded Jitsi window, and go live with one click — no headset drivers, no plugin installs.
+
+**Coordinators**
+
+Manage interpreter handoffs in real time. Switch the active interpreter for a booth without disconnecting a single listener.
+
+**Listeners / Attendees**
+
+Visit the listener page for an event, choose a language, and hear the interpreted audio stream instantly via WebRTC — or fall back to HLS on older devices.
 
 ## Key Capabilities
 
@@ -58,19 +56,19 @@ The Voxbento coordination portal handles booth state, participant rosters, hando
 ## Explore Voxbento
 
 <Cards>
-  <Card title="Quickstart" href="/quickstart">
+  <Cards.Card title="Quickstart" href="/quickstart">
     Set up your first event and get an interpreter live in under ten minutes.
-  </Card>
+  </Cards.Card>
 
-  <Card title="How It Works" href="/how-it-works">
+  <Cards.Card title="How It Works" href="/how-it-works">
     Understand the full WebRTC pipeline from interpreter mic to listener playback.
-  </Card>
+  </Cards.Card>
 
-  <Card title="Events & Rooms" href="/admin/events-and-rooms">
+  <Cards.Card title="Events & Rooms" href="/admin/events-and-rooms">
     Learn how to create and manage events, rooms, and language booths.
-  </Card>
+  </Cards.Card>
 
-  <Card title="API Overview" href="/api/overview">
+  <Cards.Card title="API Overview" href="/api/overview">
     Explore the REST and WebSocket APIs that power Voxbento's coordination layer.
-  </Card>
+  </Cards.Card>
 </Cards>

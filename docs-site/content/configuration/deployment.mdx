@@ -4,7 +4,7 @@ sidebarTitle: "Deployment"
 description: "Run Voxbento in production using Docker Compose to orchestrate the portal, MediaMTX media server, and Jitsi Meet services together."
 ---
 
-import { Cards, Card, Callout } from 'nextra/components'
+import { Callout } from 'nextra/components'
 
 Voxbento runs as a coordinated set of Docker Compose services: the **portal** (a FastAPI application), **MediaMTX** (the WebRTC media server that handles WHIP ingest and WHEP playback), and **Jitsi Meet** (used by interpreters to monitor the conference floor). All three services must be running for interpretation to work end to end. Docker Compose starts them together with a single command.
 
@@ -12,20 +12,21 @@ Voxbento runs as a coordinated set of Docker Compose services: the **portal** (a
 
 Before deploying, confirm that your server meets the following requirements:
 
-<Cards>
-  <Card title="Docker & Docker Compose">
-    Install the latest stable versions of Docker Engine and the Docker Compose plugin. Voxbento uses Compose v2 syntax (`docker compose`, not `docker-compose`).
-  </Card>
-  <Card title="Public IP or Domain">
-    WebRTC requires that media endpoints be reachable from attendee browsers. Your server needs a public IP address, and optionally a domain name for TLS.
-  </Card>
-  <Card title="Open Ports">
-    Ensure the following ports are open in your firewall and any cloud security groups before starting services.
-  </Card>
-  <Card title="Server Resources">
-    Recommended minimum: 2 vCPUs, 4 GB RAM. Jitsi and MediaMTX together are the most resource-intensive components.
-  </Card>
-</Cards>
+**Docker & Docker Compose**
+
+Install the latest stable versions of Docker Engine and the Docker Compose plugin. Voxbento uses Compose v2 syntax (`docker compose`, not `docker-compose`).
+
+**Public IP or Domain**
+
+WebRTC requires that media endpoints be reachable from attendee browsers. Your server needs a public IP address, and optionally a domain name for TLS.
+
+**Open Ports**
+
+Ensure the following ports are open in your firewall and any cloud security groups before starting services.
+
+**Server Resources**
+
+Recommended minimum: 2 vCPUs, 4 GB RAM. Jitsi and MediaMTX together are the most resource-intensive components.
 
 ### Required Open Ports
 

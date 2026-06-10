@@ -5,26 +5,26 @@ sidebarTitle: "Home"
 description: "Voxbento is a browser-first simultaneous interpretation platform. No plugins required — interpreters go live instantly and attendees hear translated audio in under a second."
 ---
 
-import { Cards, Card } from 'nextra/components'
+import { Cards } from 'nextra/components'
 
 Voxbento lets you run professional simultaneous interpretation for any live event, entirely in the browser. Interpreters monitor the floor session through a built-in Jitsi console and broadcast translated audio directly to attendees via WebRTC — with sub-second latency and seamless handoff between interpreter shifts.
 
 <Cards>
-  <Card title="Quick Start" href="/quickstart">
+  <Cards.Card title="Quick Start" href="/quickstart">
     Set up your first event, booth, and invite interpreters in minutes.
-  </Card>
+  </Cards.Card>
 
-  <Card title="How It Works" href="/how-it-works">
+  <Cards.Card title="How It Works" href="/how-it-works">
     Understand the interpretation flow from floor audio to listener playback.
-  </Card>
+  </Cards.Card>
 
-  <Card title="Admin Guide" href="/admin/events-and-rooms">
+  <Cards.Card title="Admin Guide" href="/admin/events-and-rooms">
     Create events, manage rooms, assign roles, and generate invite tokens.
-  </Card>
+  </Cards.Card>
 
-  <Card title="API Reference" href="/api/overview">
+  <Cards.Card title="API Reference" href="/api/overview">
     Integrate Voxbento into your event platform using the REST and WebSocket APIs.
-  </Card>
+  </Cards.Card>
 </Cards>
 
 ## How Voxbento Works
@@ -47,28 +47,26 @@ Attendees visit the listener page for your event, pick their language, and hear 
 
 ## Key Features
 
-<Cards>
-  <Card title="Sub-second Latency">
-    WebRTC/WHEP delivery keeps audio delay under one second for every listener.
-  </Card>
+**Sub-second Latency**
 
-  <Card title="Seamless Handoff">
-    Coordinators switch active interpreters without dropping listeners or interrupting playback.
-  </Card>
+WebRTC/WHEP delivery keeps audio delay under one second for every listener.
 
-  <Card title="Live Captions">
-    Automatic transcription via Whisper, OpenAI, Deepgram, ElevenLabs, or NVIDIA Riva.
-  </Card>
+**Seamless Handoff**
 
-  <Card title="No Install Required">
-    Everything runs in the browser. Interpreters and listeners need no plugins or apps.
-  </Card>
+Coordinators switch active interpreters without dropping listeners or interrupting playback.
 
-  <Card title="Multi-language">
-    Run unlimited language booths simultaneously for a single event.
-  </Card>
+**Live Captions**
 
-  <Card title="Role-based Access">
-    Fine-grained roles — coordinator, interpreter, listener — scoped per event or per booth.
-  </Card>
-</Cards>
+Automatic transcription via Whisper, OpenAI, Deepgram, ElevenLabs, or NVIDIA Riva.
+
+**No Install Required**
+
+Everything runs in the browser. Interpreters and listeners need no plugins or apps.
+
+**Multi-language**
+
+Run unlimited language booths simultaneously for a single event.
+
+**Role-based Access**
+
+Fine-grained roles — coordinator, interpreter, listener — scoped per event or per booth.

@@ -4,6 +4,8 @@ sidebarTitle: "Booth WS"
 description: "Connect to the Voxbento booth WebSocket for real-time coordination: participant join/leave, internal chat, interpreter handoff, and live state updates."
 ---
 
+import { Callout } from 'nextra/components'
+
 The Voxbento booth WebSocket is the nerve centre of every live interpretation session. Connecting to `/ws/booth/{booth_id}` gives you a persistent, bidirectional channel that carries participant join and leave events, internal interpreter chat, active-interpreter handoffs, and full booth state broadcasts — all in real time, with no polling required.
 
 ## Connection URL
@@ -12,9 +14,9 @@ The Voxbento booth WebSocket is the nerve centre of every live interpretation se
 ws://your-voxbento.com/ws/booth/{booth_id}
 ```
 
-<Note>
+<Callout type="info">
   Always use `wss://` (TLS) in production environments to protect session tokens in transit.
-</Note>
+</Callout>
 
 The `booth_id` path parameter follows the format `{event_slug}-{language_code}`, where `event_slug` is lowercase alphanumeric with hyphens (max 64 chars) and `language_code` is an ISO 639-1 two-letter lowercase code.
 
@@ -27,9 +29,9 @@ Voxbento resolves your identity and role from one of two sources when you open t
 - **Query parameter:** append `?token={jwt}` to the URL. Use this when you cannot set cookies (e.g. from a standalone WebSocket client or a native app).
 - **Cookie (automatic):** if your browser already holds a `session_token` (participant invite) or `user_token` (registered user) cookie for the Voxbento origin, it is sent automatically with the upgrade request — no extra steps needed.
 
-<Note>
+<Callout type="info">
   Roles are determined server-side from your session token. The server ignores any role claim in client messages.
-</Note>
+</Callout>
 
 ## Client → Server Messages
 
@@ -57,8 +59,6 @@ The server pushes JSON objects to every connected participant. You do not need t
 ## Message Shapes
 
 The examples below show the exact JSON structure for the most common messages.
-
-<CodeGroup>
 
 ```json booth:join (client → server)
 {
@@ -123,105 +123,79 @@ The examples below show the exact JSON structure for the most common messages.
 }
 ```
 
-</CodeGroup>
-
 ## Message Field Reference
 
-<Accordion title="booth:join">
-  <ParamField body="type" type="string" required>
-    Must be `"booth:join"`.
-  </ParamField>
+<details>
+<summary>booth:join</summary>
 
-  <ParamField body="display_name" type="string">
-    Human-readable name shown to other booth participants. Falls back to the name stored in your token if omitted.
-  </ParamField>
-</Accordion>
+**`type`** _(string, required)_ — Must be `"booth:join"`.
 
-<Accordion title="booth:leave">
-  <ParamField body="type" type="string" required>
-    Must be `"booth:leave"`. No additional fields are required. If the active interpreter sends this message, Voxbento automatically triggers a handoff to the next available interpreter.
-  </ParamField>
-</Accordion>
+**`display_name`** _(string)_ — Human-readable name shown to other booth participants. Falls back to the name stored in your token if omitted.
+</details>
 
-<Accordion title="booth:chat">
-  <ParamField body="type" type="string" required>
-    Must be `"booth:chat"`.
-  </ParamField>
+<details>
+<summary>booth:leave</summary>
 
-  <ParamField body="message" type="string" required>
-    The text content to broadcast. Required; empty strings are rejected.
-  </ParamField>
-</Accordion>
+**`type`** _(string, required)_ — Must be `"booth:leave"`. No additional fields are required. If the active interpreter sends this message, Voxbento automatically triggers a handoff to the next available interpreter.
+</details>
 
-<Accordion title="booth:set-active">
-  <ParamField body="type" type="string" required>
-    Must be `"booth:set-active"`.
-  </ParamField>
+<details>
+<summary>booth:chat</summary>
 
-  <ParamField body="interpreter_id" type="string" required>
-    The `user_id` of the interpreter to promote to active. Must be a current booth participant.
-  </ParamField>
-</Accordion>
+**`type`** _(string, required)_ — Must be `"booth:chat"`.
 
-<Accordion title="booth:update-state">
-  <ParamField body="type" type="string" required>
-    Must be `"booth:update-state"`.
-  </ParamField>
+**`message`** _(string, required)_ — The text content to broadcast. Required; empty strings are rejected.
+</details>
 
-  <ParamField body="mic_active" type="boolean">
-    Set to `true` when the interpreter's microphone is live, `false` when muted.
-  </ParamField>
+<details>
+<summary>booth:set-active</summary>
 
-  <ParamField body="ingest_connected" type="boolean">
-    Set to `true` when the WHIP ingest connection is established, `false` when it drops.
-  </ParamField>
-</Accordion>
+**`type`** _(string, required)_ — Must be `"booth:set-active"`.
 
-<Accordion title="booth:joined (server → client)">
-  <ResponseField name="type" type="string">
-    Always `"booth:joined"`.
-  </ResponseField>
+**`interpreter_id`** _(string, required)_ — The `user_id` of the interpreter to promote to active. Must be a current booth participant.
+</details>
 
-  <ResponseField name="role" type="string">
-    The server-assigned role for this participant: `interpreter`, `coordinator`, `event_admin`, or `listener`.
-  </ResponseField>
-</Accordion>
+<details>
+<summary>booth:update-state</summary>
 
-<Accordion title="booth:state (server → client)">
-  <ResponseField name="type" type="string">
-    Always `"booth:state"`.
-  </ResponseField>
+**`type`** _(string, required)_ — Must be `"booth:update-state"`.
 
-  <ResponseField name="booth_id" type="string">
-    The booth identifier in `{event_slug}-{language_code}` format.
-  </ResponseField>
+**`mic_active`** _(boolean)_ — Set to `true` when the interpreter's microphone is live, `false` when muted.
 
-  <ResponseField name="active_interpreter_id" type="string | null">
-    The `user_id` of the currently active interpreter, or `null` if no interpreter is active.
-  </ResponseField>
+**`ingest_connected`** _(boolean)_ — Set to `true` when the WHIP ingest connection is established, `false` when it drops.
+</details>
 
-  <ResponseField name="participants" type="array">
-    List of all current booth participants, each with `user_id`, `display_name`, and `role`.
-  </ResponseField>
+<details>
+<summary>booth:joined (server → client)</summary>
 
-  <ResponseField name="mic_active" type="boolean">
-    Whether the active interpreter's microphone is currently live.
-  </ResponseField>
+**`type`** _(string)_ — Always `"booth:joined"`.
 
-  <ResponseField name="ingest_connected" type="boolean">
-    Whether the active interpreter's WHIP stream is connected.
-  </ResponseField>
-</Accordion>
+**`role`** _(string)_ — The server-assigned role for this participant: `interpreter`, `coordinator`, `event_admin`, or `listener`.
+</details>
 
-<Accordion title="booth:error (server → client)">
-  <ResponseField name="type" type="string">
-    Always `"booth:error"`.
-  </ResponseField>
+<details>
+<summary>booth:state (server → client)</summary>
 
-  <ResponseField name="message" type="string">
-    A human-readable description of the error, e.g. `"Permission denied"` or `"Unknown message type"`.
-  </ResponseField>
-</Accordion>
+**`type`** _(string)_ — Always `"booth:state"`.
+
+**`booth_id`** _(string)_ — The booth identifier in `{event_slug}-{language_code}` format.
+
+**`active_interpreter_id`** _(string | null)_ — The `user_id` of the currently active interpreter, or `null` if no interpreter is active.
+
+**`participants`** _(array)_ — List of all current booth participants, each with `user_id`, `display_name`, and `role`.
+
+**`mic_active`** _(boolean)_ — Whether the active interpreter's microphone is currently live.
+
+**`ingest_connected`** _(boolean)_ — Whether the active interpreter's WHIP stream is connected.
+</details>
+
+<details>
+<summary>booth:error (server → client)</summary>
+
+**`type`** _(string)_ — Always `"booth:error"`.
+
+**`message`** _(string)_ — A human-readable description of the error, e.g. `"Permission denied"` or `"Unknown message type"`.
+</details>
 
 ## Example: JavaScript Connection
 
@@ -248,28 +222,26 @@ ws.onerror = (err) => console.error('[booth ws] error', err);
 ws.onclose = (e)  => console.warn('[booth ws] closed', e.code, e.reason);
 ```
 
-<Tip>
+<Callout type="info">
   Implement exponential back-off reconnection logic in production clients. If the active interpreter's connection drops, Voxbento automatically triggers a handoff to the next available interpreter — but your UI should reconnect promptly to receive the updated `booth:state` broadcast.
-</Tip>
+</Callout>
 
 ## Role Permissions Summary
 
 Your token's server-assigned role gates which messages you can send. Attempting a restricted action returns a `booth:error` message.
 
-<CardGroup cols={2}>
-  <Card title="interpreter" icon="microphone">
-    Can join, leave, chat, and update mic/ingest state flags. Cannot set another interpreter as active.
-  </Card>
+**interpreter**
 
-  <Card title="coordinator" icon="sliders">
-    Can do everything an interpreter can, plus promote any booth participant to the active interpreter role.
-  </Card>
+Can join, leave, chat, and update mic/ingest state flags. Cannot set another interpreter as active.
 
-  <Card title="event_admin" icon="shield-check">
-    Full control over the booth, including active-interpreter assignment and all coordinator capabilities.
-  </Card>
+**coordinator**
 
-  <Card title="listener" icon="headphones">
-    Can join and leave only. Listeners cannot send chat or modify booth state.
-  </Card>
-</CardGroup>
+Can do everything an interpreter can, plus promote any booth participant to the active interpreter role.
+
+**event_admin**
+
+Full control over the booth, including active-interpreter assignment and all coordinator capabilities.
+
+**listener**
+
+Can join and leave only. Listeners cannot send chat or modify booth state.

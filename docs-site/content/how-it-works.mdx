@@ -4,7 +4,7 @@ sidebarTitle: "How It Works"
 description: "Trace the complete path from an interpreter's microphone through the WebRTC pipeline to listeners' ears, with sub-second end-to-end latency."
 ---
 
-import { Cards, Card, Callout, Tabs } from 'nextra/components'
+import { Callout, Tabs } from 'nextra/components'
 
 Voxbento is built on a single guiding principle: the audio path should be as short and as direct as possible. Rather than routing interpreter microphone audio through application servers, Voxbento sends audio straight from the interpreter's browser to MediaMTX — an open-source media server — and from there straight to each listener's browser. The Voxbento coordination portal sits alongside that path to handle coordination, but it never touches the audio itself.
 
@@ -93,19 +93,17 @@ Here is what happens when a coordinator switches the active interpreter:
 
 Voxbento has three participant roles that are active during a live event:
 
-<Cards>
-  <Card title="Coordinator">
-    Manages the booth. Assigns which interpreter is active, initiates handoffs, and monitors participant state. Coordinators can see the full participant roster and internal booth chat. They cannot publish audio themselves.
-  </Card>
+**Coordinator**
 
-  <Card title="Interpreter">
-    Monitors floor audio via the Jitsi iframe and publishes translated audio to MediaMTX via WHIP when they are the active interpreter. Only the active interpreter can go live — all others are held in standby.
-  </Card>
+Manages the booth. Assigns which interpreter is active, initiates handoffs, and monitors participant state. Coordinators can see the full participant roster and internal booth chat. They cannot publish audio themselves.
 
-  <Card title="Listener">
-    Receives the interpreted audio stream from MediaMTX via WHEP or HLS. Listeners connect to the event's public listener page and choose a language — no login required by default.
-  </Card>
-</Cards>
+**Interpreter**
+
+Monitors floor audio via the Jitsi iframe and publishes translated audio to MediaMTX via WHIP when they are the active interpreter. Only the active interpreter can go live — all others are held in standby.
+
+**Listener**
+
+Receives the interpreted audio stream from MediaMTX via WHEP or HLS. Listeners connect to the event's public listener page and choose a language — no login required by default.
 
 ## Live Captions
 

@@ -4,7 +4,7 @@ sidebarTitle: "Invite Tokens"
 description: "Generate, share, and revoke time-limited invite tokens to grant interpreters, coordinators, and listeners direct access to Voxbento booths."
 ---
 
-import { Cards, Card, Callout, Tabs } from 'nextra/components'
+import { Callout, Tabs } from 'nextra/components'
 
 Invite tokens let you bring participants into a booth without requiring them to register an account. You generate a token for a specific role, copy the join link, and share it with the intended person — when they open the link, Voxbento validates the token and drops them directly into the booth with the right permissions. This makes invite tokens ideal for one-time event attendees or interpreters who don't have an existing Voxbento account.
 
@@ -21,23 +21,21 @@ When a participant opens the join URL, Voxbento validates the token and authenti
 
 ## When to Use Invite Tokens
 
-<Cards>
-  <Card title="Guest Interpreters">
-    Quickly onboard interpreters who don't have a registered account. Generate an interpreter token and share the link — they're live in seconds.
-  </Card>
+**Guest Interpreters**
 
-  <Card title="One-Time Attendees">
-    For events where listeners don't need persistent accounts, issue listener tokens and distribute them alongside your event registration materials.
-  </Card>
+Quickly onboard interpreters who don't have a registered account. Generate an interpreter token and share the link — they're live in seconds.
 
-  <Card title="Coordinator Access">
-    Give a coordinator temporary access to a specific booth without granting them a full event-level role.
-  </Card>
+**One-Time Attendees**
 
-  <Card title="Testing Booths">
-    Generate a short-lived token to verify a booth is working before the event starts, then revoke it immediately after.
-  </Card>
-</Cards>
+For events where listeners don't need persistent accounts, issue listener tokens and distribute them alongside your event registration materials.
+
+**Coordinator Access**
+
+Give a coordinator temporary access to a specific booth without granting them a full event-level role.
+
+**Testing Booths**
+
+Generate a short-lived token to verify a booth is working before the event starts, then revoke it immediately after.
 
 ## Generating a Token
 

@@ -4,6 +4,8 @@ sidebarTitle: "Event Booths"
 description: "Create interpretation booths and list all active booths for an event using the Voxbento REST API to support dynamic, runtime-provisioned event platforms."
 ---
 
+import { Callout } from 'nextra/components'
+
 These endpoints let you programmatically create booths and list all active booths for an event. This is useful for event platforms that provision booths dynamically at runtime rather than pre-configuring them through the admin panel.
 
 ## Create a Booth
@@ -20,19 +22,13 @@ A Bearer token is required. See the [Authentication guide](/api/authentication) 
 
 ### Path Parameters
 
-<ParamField path="event_slug" type="string" required>
-  The URL slug of the event under which the booth is created, e.g. `pycon2026`. The event must already exist before you can create booths for it.
-</ParamField>
+**`event_slug`** _(string, required)_ — The URL slug of the event under which the booth is created, e.g. `pycon2026`. The event must already exist before you can create booths for it.
 
 ### Request Body
 
-<ParamField body="language_code" type="string" required>
-  ISO 639-1 two-letter language code in lowercase, e.g. `en`. Combined with the event slug to derive the `booth_id` and channel path.
-</ParamField>
+**`language_code`** _(string, required)_ — ISO 639-1 two-letter language code in lowercase, e.g. `en`. Combined with the event slug to derive the `booth_id` and channel path.
 
-<ParamField body="language_name" type="string">
-  Human-readable language name displayed in the UI, e.g. `"English"`. Defaults to the uppercased `language_code` if omitted.
-</ParamField>
+**`language_name`** _(string)_ — Human-readable language name displayed in the UI, e.g. `"English"`. Defaults to the uppercased `language_code` if omitted.
 
 ### Example Request
 
@@ -87,9 +83,7 @@ A Bearer token is required.
 
 ### Path Parameters
 
-<ParamField path="event_slug" type="string" required>
-  The URL slug of the event whose booths you want to list.
-</ParamField>
+**`event_slug`** _(string, required)_ — The URL slug of the event whose booths you want to list.
 
 ### Example Request
 
@@ -140,56 +134,33 @@ curl https://voxbento.com/api/events/pycon2026/booths \
 
 ### Response Fields
 
-<ResponseField name="event_slug" type="string">
-  The event slug echoed from the request path.
-</ResponseField>
+**`event_slug`** _(string)_ — The event slug echoed from the request path.
 
-<ResponseField name="booths" type="array">
-  An array of booth state objects. Each object has the same shape as the response from [GET booth state](/api/booths/state).
+**`booths`** _(array)_ — An array of booth state objects. Each object has the same shape as the response from [GET booth state](/api/booths/state).
 
-  <Expandable title="Booth object fields">
-    <ResponseField name="booth_id" type="string">
-      Canonical booth identifier in the format `{event_slug}-{language_code}`.
-    </ResponseField>
+<details>
+<summary>Booth object fields</summary>
 
-    <ResponseField name="mediamtx_path" type="string">
-      The channel path in the format `{event_slug}/{language_code}`.
-    </ResponseField>
-
-    <ResponseField name="whip_url" type="string">
-      The WHIP ingest URL for the active interpreter to publish audio.
-    </ResponseField>
-
-    <ResponseField name="whep_url" type="string">
-      The WHEP playback URL for listeners to receive audio.
-    </ResponseField>
-
-    <ResponseField name="active_interpreter_id" type="string | null">
-      Participant ID of the currently active interpreter, or `null`.
-    </ResponseField>
-
-    <ResponseField name="mic_active" type="boolean">
-      Whether the active interpreter's microphone is currently transmitting.
-    </ResponseField>
-
-    <ResponseField name="ingest_connected" type="boolean">
-      Whether the WHIP ingest connection is established.
-    </ResponseField>
-
-    <ResponseField name="participants" type="array">
-      All participants currently connected to the booth WebSocket.
-    </ResponseField>
-  </Expandable>
-</ResponseField>
+| Field | Type | Description |
+| --- | --- | --- |
+| `booth_id` | string | Canonical booth identifier in the format `{event_slug}-{language_code}`. |
+| `mediamtx_path` | string | The channel path in the format `{event_slug}/{language_code}`. |
+| `whip_url` | string | The WHIP ingest URL for the active interpreter to publish audio. |
+| `whep_url` | string | The WHEP playback URL for listeners to receive audio. |
+| `active_interpreter_id` | string \| null | Participant ID of the currently active interpreter, or `null`. |
+| `mic_active` | boolean | Whether the active interpreter's microphone is currently transmitting. |
+| `ingest_connected` | boolean | Whether the WHIP ingest connection is established. |
+| `participants` | array | All participants currently connected to the booth WebSocket. |
+</details>
 
 ---
 
 ## Prerequisites and Behaviour Notes
 
-<Note>
+<Callout type="info">
   The event must exist — created via the admin panel — before you can create or list booths for it via the API. Attempting to create a booth for a non-existent event slug returns a `400 Bad Request`.
-</Note>
+</Callout>
 
-<Note>
+<Callout type="info">
   Booths created via this API endpoint are held in live memory only and do not survive a server restart. Booths created through the admin panel are persisted to the database. Both types appear in the list returned by `GET /api/events/{event_slug}/booths`.
-</Note>
+</Callout>

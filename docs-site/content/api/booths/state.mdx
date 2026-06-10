@@ -4,6 +4,8 @@ sidebarTitle: "Booth State"
 description: "Retrieve the live state of an interpretation booth, including the active interpreter, connected participants, mic status, and stream health."
 ---
 
+import { Callout } from 'nextra/components'
+
 The booth state endpoints return the live state of an interpretation booth — active interpreter, connected participants, mic status, and stream health. Use this data to power monitoring dashboards, coordinator UIs, or any integration that needs to know who is currently active in a booth.
 
 ## Endpoints
@@ -21,19 +23,15 @@ For the legacy endpoint, construct `booth_id` as `{event_slug}-{language_code}` 
 
 Both endpoints require a Bearer token in the `Authorization` header. Obtain a token from `POST /api/auth/token`. See the [Authentication guide](/api/authentication) for the full token flow.
 
-<Warning>
+<Callout type="warning">
   Requests without a valid Bearer token receive a `403 Forbidden` response.
-</Warning>
+</Callout>
 
 ## Path Parameters
 
-<ParamField path="event_slug" type="string" required>
-  The event's URL slug, e.g. `pycon2026`. Must be lowercase alphanumeric with optional hyphens, maximum 64 characters.
-</ParamField>
+**`event_slug`** _(string, required)_ — The event's URL slug, e.g. `pycon2026`. Must be lowercase alphanumeric with optional hyphens, maximum 64 characters.
 
-<ParamField path="language_code" type="string" required>
-  ISO 639-1 two-letter language code in lowercase, e.g. `en`. Identifies which language channel's booth to retrieve.
-</ParamField>
+**`language_code`** _(string, required)_ — ISO 639-1 two-letter language code in lowercase, e.g. `en`. Identifies which language channel's booth to retrieve.
 
 ## Example Request
 
@@ -62,49 +60,26 @@ curl https://voxbento.com/api/events/pycon2026/booths/en/state \
 
 ## Response Fields
 
-<ResponseField name="booth_id" type="string">
-  The canonical booth identifier, derived as `{event_slug}-{language_code}`.
-</ResponseField>
+| Field | Type | Description |
+| --- | --- | --- |
+| `booth_id` | string | The canonical booth identifier, derived as `{event_slug}-{language_code}`. |
+| `event_slug` | string | The event slug this booth belongs to. |
+| `language_code` | string | The ISO 639-1 language code for this booth's channel. |
+| `active_interpreter_id` | string \| null | The participant ID of the interpreter currently authorised to publish audio. `null` when no interpreter is active. |
+| `active_interpreter_name` | string \| null | The display name of the active interpreter, or `null` if no interpreter is active. |
+| `mic_active` | boolean | Whether the active interpreter's microphone is currently unmuted and transmitting audio. |
+| `ingest_connected` | boolean | Whether the WHIP ingest connection is currently established and healthy. |
+| `participants` | array | List of all participants currently connected to the booth WebSocket. |
 
-<ResponseField name="event_slug" type="string">
-  The event slug this booth belongs to.
-</ResponseField>
+<details>
+<summary>Participant object fields</summary>
 
-<ResponseField name="language_code" type="string">
-  The ISO 639-1 language code for this booth's channel.
-</ResponseField>
-
-<ResponseField name="active_interpreter_id" type="string | null">
-  The participant ID of the interpreter currently authorised to publish audio. `null` when no interpreter is active.
-</ResponseField>
-
-<ResponseField name="active_interpreter_name" type="string | null">
-  The display name of the active interpreter, or `null` if no interpreter is active.
-</ResponseField>
-
-<ResponseField name="mic_active" type="boolean">
-  Whether the active interpreter's microphone is currently unmuted and transmitting audio.
-</ResponseField>
-
-<ResponseField name="ingest_connected" type="boolean">
-  Whether the WHIP ingest connection is currently established and healthy.
-</ResponseField>
-
-<ResponseField name="participants" type="array">
-  List of all participants currently connected to the booth WebSocket.
-
-  <Expandable title="Participant object fields">
-    <ResponseField name="id" type="string">
-      The participant's unique ID within this booth session.
-    </ResponseField>
-    <ResponseField name="name" type="string">
-      The participant's display name.
-    </ResponseField>
-    <ResponseField name="role" type="string">
-      The role granted to this participant: `interpreter`, `coordinator`, `event_admin`, or `listener`.
-    </ResponseField>
-  </Expandable>
-</ResponseField>
+| Field | Type | Description |
+| --- | --- | --- |
+| `id` | string | The participant's unique ID within this booth session. |
+| `name` | string | The participant's display name. |
+| `role` | string | The role granted to this participant: `interpreter`, `coordinator`, `event_admin`, or `listener`. |
+</details>
 
 ## Error Responses
 
@@ -113,6 +88,6 @@ curl https://voxbento.com/api/events/pycon2026/booths/en/state \
 | `404 Not Found` | No booth for the given `language_code` exists in memory for this event. |
 | `403 Forbidden` | Bearer token is missing or invalid. |
 
-<Note>
+<Callout type="info">
   Booth state is held in memory. A booth enters memory when the first participant joins, and is cleared if all participants leave. A `404` response does not mean the booth is misconfigured — it simply means nobody has connected to it yet.
-</Note>
+</Callout>

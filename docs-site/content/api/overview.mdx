@@ -4,6 +4,8 @@ sidebarTitle: "API Overview"
 description: "Explore every REST and WebSocket endpoint in the Voxbento API — manage booths, query live state, and retrieve WHIP stream URLs from any integration."
 ---
 
+import { Cards, Callout } from 'nextra/components'
+
 The Voxbento REST API gives you programmatic control over booths and events, lets you query live booth state, and surfaces the WHIP and WHEP stream URLs your interpreter and listener clients need. Whether you're building an event platform integration, a custom booth dashboard, or an automated provisioning script, every operation described in this guide is available over plain HTTPS with JSON.
 
 ## Base URL
@@ -64,26 +66,26 @@ A healthy response looks like this:
 
 If `mediamtx_ok` is `false`, interpreter ingest and listener playback will be unavailable even if the portal itself is running.
 
-<Note>
+<Callout type="info">
   Use `mediamtx_ok` to determine whether the media server is reachable before starting a stream. If it is `false`, check the MediaMTX service logs on your deployment.
-</Note>
+</Callout>
 
 ## Explore the API
 
-<CardGroup cols={2}>
-  <Card title="Authentication" icon="key" href="/api/authentication">
+<Cards>
+  <Cards.Card title="Authentication" href="/api/authentication">
     Learn how to obtain a bearer JWT and include it in your API requests.
-  </Card>
+  </Cards.Card>
 
-  <Card title="Booth State" icon="signal" href="/api/booths/state">
+  <Cards.Card title="Booth State" href="/api/booths/state">
     Query the live state of any interpreter booth, including participant list and active interpreter.
-  </Card>
+  </Cards.Card>
 
-  <Card title="WHIP & WHEP URLs" icon="broadcast-tower" href="/api/booths/whip-whep">
+  <Cards.Card title="WHIP & WHEP URLs" href="/api/booths/whip-whep">
     Retrieve the WHIP ingest and WHEP playback URLs for a booth's audio channel.
-  </Card>
+  </Cards.Card>
 
-  <Card title="Events & Booths" icon="calendar" href="/api/booths/events">
+  <Cards.Card title="Events & Booths" href="/api/booths/events">
     Create and list in-memory booths scoped to a specific event slug.
-  </Card>
-</CardGroup>
+  </Cards.Card>
+</Cards>

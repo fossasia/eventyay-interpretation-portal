@@ -4,7 +4,7 @@ sidebarTitle: "Handoff"
 description: "Switch the active interpreter mid-event without dropping listener connections — coordinators and interpreters both have tools for smooth audio handoffs."
 ---
 
-import { Cards, Card, Callout } from 'nextra/components'
+import { Callout } from 'nextra/components'
 
 Interpretation at live events rarely runs on a single interpreter for the entire duration. Voxbento is built for real-world shifts: you can replace the active publisher with a backup interpreter in roughly one to two seconds, and listeners never lose their connection or need to refresh. This page explains how handoff works under the hood, who can trigger one, and the exact steps for both the outgoing and incoming interpreter.
 
@@ -14,20 +14,21 @@ When a coordinator or active interpreter triggers a handoff, Voxbento immediatel
 
 ## Who Can Trigger a Handoff
 
-<Cards>
-  <Card title="Coordinators">
-    Anyone with the `coordinator` role can set any interpreter in the roster as the active publisher at any time. This is the primary handoff mechanism during structured shifts.
-  </Card>
-  <Card title="Active Interpreter">
-    The currently active interpreter can voluntarily hand off to a backup interpreter in the roster, even without a coordinator present.
-  </Card>
-  <Card title="Event Admins">
-    Event admins have all coordinator permissions and can manage handoffs across every booth in their event.
-  </Card>
-  <Card title="Super Admins">
-    Super admins have global handoff rights across every event and booth in the Voxbento instance.
-  </Card>
-</Cards>
+**Coordinators**
+
+Anyone with the `coordinator` role can set any interpreter in the roster as the active publisher at any time. This is the primary handoff mechanism during structured shifts.
+
+**Active Interpreter**
+
+The currently active interpreter can voluntarily hand off to a backup interpreter in the roster, even without a coordinator present.
+
+**Event Admins**
+
+Event admins have all coordinator permissions and can manage handoffs across every booth in their event.
+
+**Super Admins**
+
+Super admins have global handoff rights across every event and booth in the Voxbento instance.
 
 ## Steps to Hand Off (Coordinator Perspective)
 

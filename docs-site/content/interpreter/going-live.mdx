@@ -4,7 +4,7 @@ sidebarTitle: "Going Live"
 description: "Start broadcasting your interpretation to all listeners by publishing audio through Voxbento's real-time interpreter console in just a few steps."
 ---
 
-import { Cards, Card, Callout, Tabs } from 'nextra/components'
+import { Callout, Tabs } from 'nextra/components'
 
 Going live in Voxbento means your microphone audio is published via WebRTC to the media relay, where listeners receive it in near real-time. The process is designed to be fast — from clicking **Go Live** to listeners hearing you takes only a fraction of a second. This page walks you through the preflight check, the controls available while you're on air, and how to hand back gracefully when your shift ends.
 
@@ -12,19 +12,17 @@ Going live in Voxbento means your microphone audio is published via WebRTC to th
 
 Before you attempt to go live, make sure the following are in place:
 
-<Cards>
-  <Card title="Joined the Booth">
-    You have opened the booth via an invite link or your registered account dashboard. See [Joining a Booth](/interpreter/joining-a-booth) if you haven't done this yet.
-  </Card>
+**Joined the Booth**
 
-  <Card title="Mic Permission Granted">
-    Your browser has been given permission to access your microphone and the VU meter responds when you speak.
-  </Card>
+You have opened the booth via an invite link or your registered account dashboard. See [Joining a Booth](/interpreter/joining-a-booth) if you haven't done this yet.
 
-  <Card title="Interpreter or Coordinator Role">
-    Your session token or account assignment grants you the `interpreter` or `coordinator` role. Listeners cannot go live.
-  </Card>
-</Cards>
+**Mic Permission Granted**
+
+Your browser has been given permission to access your microphone and the VU meter responds when you speak.
+
+**Interpreter or Coordinator Role**
+
+Your session token or account assignment grants you the `interpreter` or `coordinator` role. Listeners cannot go live.
 
 ## Preflight Check
 
@@ -61,19 +59,17 @@ Start speaking. The floor audio from the Jitsi iframe plays in your headset so y
 
 ## Audio Controls While Live
 
-<Cards>
-  <Card title="Mic Mute / Unmute">
-    Toggle your mic on or off at any time without stopping the stream. Use this for brief pauses — coughing, notes, transitions — without going fully offline.
-  </Card>
+**Mic Mute / Unmute**
 
-  <Card title="VU Meter">
-    A volume unit meter shows your current microphone level in real time. Keep levels out of the red to avoid clipping.
-  </Card>
+Toggle your mic on or off at any time without stopping the stream. Use this for brief pauses — coughing, notes, transitions — without going fully offline.
 
-  <Card title="Floor Audio Volume">
-    Adjust the volume of the Jitsi floor monitor in your headset independently. Turning this down helps reduce cognitive load during dense speech segments.
-  </Card>
-</Cards>
+**VU Meter**
+
+A volume unit meter shows your current microphone level in real time. Keep levels out of the red to avoid clipping.
+
+**Floor Audio Volume**
+
+Adjust the volume of the Jitsi floor monitor in your headset independently. Turning this down helps reduce cognitive load during dense speech segments.
 
 ## What Listeners Hear
 
