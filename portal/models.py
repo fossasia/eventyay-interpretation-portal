@@ -172,6 +172,21 @@ class DBBooth(Base):
 
 
 # ---------------------------------------------------------------------------
+# TranscriptSegment
+# ---------------------------------------------------------------------------
+
+class TranscriptSegment(Base):
+    __tablename__ = 'transcript_segments'
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    room_id: Mapped[int] = mapped_column(ForeignKey('rooms.id', ondelete='CASCADE'))
+    booth_id: Mapped[int | None] = mapped_column(ForeignKey('booths.id', ondelete='CASCADE'), nullable=True, default=None)
+    language_code: Mapped[str] = mapped_column(String(10))
+    text: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+# ---------------------------------------------------------------------------
 # InviteToken
 # ---------------------------------------------------------------------------
 

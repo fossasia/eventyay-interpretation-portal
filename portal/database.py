@@ -488,3 +488,39 @@ async def revoke_invite_token(session: AsyncSession, token_str: str) -> InviteTo
     tok.used_at = utc_now()
     await session.flush()
     return tok
+
+# ---------------------------------------------------------------------------
+# Transcripts
+# ---------------------------------------------------------------------------
+
+async def save_transcript_segment(booth_id_str: str, text: str, room_id: int | None = None) -> None:
+    """Save a finalized transcript segment to the database asynchronously."""
+    from portal.models import TranscriptSegment, DBBooth, Event
+    from sqlalchemy import select
+
+    parts = booth_id_str.split('-')
+    if len(parts) < 2:
+        return
+        
+    language_code = parts[-1]
+    event_slug = "-".join(parts[:-1])
+
+    try:
+        async with get_session() as session:
+            booth_id = None
+            if language_code != "floor":
+                stmt = select(DBBooth.id).join(Event).where(
+                    Event.slug == event_slug,
+                    DBBooth.language_code == language_code
+                )
+                booth_id = await session.scalar(stmt)
+
+            segment = TranscriptSegment(
+                room_id=room_id,
+                booth_id=booth_id,
+                language_code=language_code,
+                text=text
+            )
+            session.add(segment)
+    except Exception as e:
+        logger.error(f"Failed to save transcript segment: {e}")

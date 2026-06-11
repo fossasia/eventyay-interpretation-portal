@@ -47,9 +47,11 @@ class ElevenLabsProvider(TranscriptionProvider):
             raise e
         return ""
 
-    async def run_stream(self, process: asyncio.subprocess.Process, language_code: str, model_variant: str, config: ProviderConfig, broadcast_callback, booth_id: str) -> None:
+    async def run_stream(self, process: asyncio.subprocess.Process, language_code: str, model_variant: str, config: ProviderConfig, broadcast_callback, booth_id: str, room_id: int | None = None) -> None:
+        import websockets
         from portal.transcription.aggregator import CaptionAggregator
-        aggregator = CaptionAggregator(broadcast_callback)
+        
+        aggregator = CaptionAggregator(broadcast_callback, room_id=room_id)
         api_key = config.get_key()
         if not api_key:
             logger.error(f"ElevenLabs API key missing")
