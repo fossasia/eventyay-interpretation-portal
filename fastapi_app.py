@@ -1382,13 +1382,16 @@ async def api_start_floor_transcription(room_id: int):
         
         if room.jitsi_url:
             jitsi_url = room.jitsi_url
-            # Replace local or production domains with internal docker routing (use https internally to avoid WebRTC HTTP blocking)
-            if jitsi_url.startswith(settings.effective_jitsi_base_url):
-                jitsi_url = jitsi_url.replace(settings.effective_jitsi_base_url, settings.effective_jitsi_internal_base, 1)
-            elif "jitsi.voxbento.com" in jitsi_url:
-                jitsi_url = re.sub(r"https?://jitsi\.voxbento\.com", settings.effective_jitsi_internal_base, jitsi_url, count=1)
-            elif "localhost" in jitsi_url or "127.0.0.1" in jitsi_url:
-                jitsi_url = re.sub(r"https?://(?:localhost|127\.0\.0\.1)(?::\d+)?", settings.effective_jitsi_internal_base, jitsi_url, count=1)
+            import urllib.parse
+            parsed = urllib.parse.urlparse(room.jitsi_url)
+            internal_parsed = urllib.parse.urlparse(settings.effective_jitsi_internal_base)
+            base_parsed = urllib.parse.urlparse(settings.effective_jitsi_base_url)
+            
+            if parsed.netloc in ("jitsi.voxbento.com", base_parsed.netloc) or parsed.netloc.startswith(("localhost", "127.0.0.1")):
+                parsed = parsed._replace(scheme=internal_parsed.scheme, netloc=internal_parsed.netloc)
+                jitsi_url = urllib.parse.urlunparse(parsed)
+            else:
+                jitsi_url = room.jitsi_url
         else:
             jitsi_url = f"{settings.effective_jitsi_internal_base}/{room_id_str}"
             

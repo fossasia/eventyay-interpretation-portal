@@ -22,10 +22,14 @@ class SubprocessManager:
                 self.stop_room_locked(event_slug)
 
             logger.info(f"Starting subprocess for event: {event_slug}")
-            
+            env = os.environ.copy()
+            env["BOT_EVENT_SLUG"] = event_slug
+            env["BOT_JITSI_URL"] = jitsi_url
+            env["BOT_MEDIAMTX_RTSP_BASE"] = mediamtx_rtsp_base
+
             cmd = [
                 "python", "-u", "-c",
-                f"""
+                """
 import asyncio
 import os
 import signal
@@ -33,17 +37,18 @@ import subprocess
 from playwright.async_api import async_playwright
 
 async def run_capture():
-    event_slug = "{event_slug}"
-    jitsi_url = "{jitsi_url}"
-    mediamtx_rtsp_base = "{mediamtx_rtsp_base}"
-    pulse_socket = f"/tmp/pulse-{{event_slug}}.sock"
-    pulse_dir = f"/tmp/pulse-dir-{{event_slug}}"
+    event_slug = os.environ.get("BOT_EVENT_SLUG")
+    jitsi_url = os.environ.get("BOT_JITSI_URL")
+    mediamtx_rtsp_base = os.environ.get("BOT_MEDIAMTX_RTSP_BASE")
+    
+    pulse_socket = f"/tmp/pulse-{event_slug}.sock"
+    pulse_dir = f"/tmp/pulse-dir-{event_slug}"
     
     os.makedirs(pulse_dir, exist_ok=True)
-    sink_name = f"sink_{{event_slug}}"
+    sink_name = f"sink_{event_slug}"
     
-    subprocess.run(["pkill", "-f", f"ffmpeg.*{{event_slug}}"], stderr=subprocess.DEVNULL)
-    subprocess.run(["pkill", "-f", f"pulseaudio.*{{event_slug}}"], stderr=subprocess.DEVNULL)
+    subprocess.run(["pkill", "-f", f"ffmpeg.*{event_slug}"], stderr=subprocess.DEVNULL)
+    subprocess.run(["pkill", "-f", f"pulseaudio.*{event_slug}"], stderr=subprocess.DEVNULL)
     if os.path.exists(pulse_socket):
         try:
             os.remove(pulse_socket)
@@ -56,17 +61,18 @@ async def run_capture():
         "--exit-idle-time=-1",
         "--disallow-exit",
         "-n",
-        "-L", f"module-native-protocol-unix auth-anonymous=1 socket={{pulse_socket}}",
-        "-L", f"module-null-sink sink_name={{sink_name}}",
+        "-L", f"module-native-protocol-unix auth-anonymous=1 socket={pulse_socket}",
+        "-L", f"module-null-sink sink_name={sink_name}",
         "-L", "module-always-sink"
     ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     
     await asyncio.sleep(2)
     
     env = os.environ.copy()
-    env["PULSE_SERVER"] = f"unix:{{pulse_socket}}"
+    env["PULSE_SERVER"] = f"unix:{pulse_socket}"
     
     pw = await async_playwright().start()
+    
     browser = await pw.chromium.launch(
         headless=True,
         env=env,
@@ -74,40 +80,40 @@ async def run_capture():
         args=[
             "--use-fake-ui-for-media-stream",
             "--use-fake-device-for-media-stream",
-            "--disable-features=AudioServiceOutOfProcess",
-            "--autoplay-policy=no-user-gesture-required",
+            "--disable-gesture-requirement-for-media-playback",
             "--ignore-certificate-errors",
             "--unsafely-treat-insecure-origin-as-secure=https://jitsi-web",
+            "--autoplay-policy=no-user-gesture-required",
             "--no-sandbox",
             "--disable-setuid-sandbox",
             "--disable-dev-shm-usage"
-        ],
+        ]
     )
     
     context = await browser.new_context(
-        permissions=['camera', 'microphone']
+        permissions=["microphone", "camera"],
+        ignore_https_errors=True
     )
-    page = await context.new_page()
     
-    page.on("console", lambda m: print(f"Browser: {{m.text}}"))
-    page.on("pageerror", lambda err: print(f"Browser Error: {{err}}"))
+    page = await context.new_page()
+    page.on("console", lambda m: print(f"Browser: {m.text}"))
+    page.on("pageerror", lambda err: print(f"Browser Error: {err}"))
     
     import urllib.parse
     display_name = urllib.parse.quote('"VoxBento FloorBot"')
     
     join_url = (
-        f"{{jitsi_url}}"
-        f"#config.startWithAudioMuted=true"
+        f"{jitsi_url}"
+        f"#config.startWithAudioMuted=false"
         f"&config.startWithVideoMuted=true"
-        f"&config.startAudioOnly=true"
         f"&config.prejoinPageEnabled=false"
-        f"&config.startSilent=false"
+        f"&config.disableDeepLinking=true"
         f"&config.p2p.enabled=false"
-        f"&config.disable1On1Mode=true"
-        f"&userInfo.displayName={{display_name}}"
+        f"&config.requireDisplayName=false"
+        f"&userInfo.displayName={display_name}"
     )
     
-    print(f"Joining: {{join_url}}")
+    print(f"Joining: {join_url}")
     await page.goto(join_url)
     
     await asyncio.sleep(5)
@@ -121,7 +127,7 @@ async def run_capture():
     ffmpeg_proc = await asyncio.create_subprocess_exec(
         "ffmpeg", "-y",
         "-f", "pulse",
-        "-i", f"{{sink_name}}.monitor",
+        "-i", f"{sink_name}.monitor",
         "-ac", "1",
         "-ar", "16000",
         "-c:a", "libopus",
@@ -131,7 +137,7 @@ async def run_capture():
         "-application", "lowdelay",
         "-f", "rtsp",
         "-rtsp_transport", "tcp",
-        f"{{mediamtx_rtsp_base}}/{{event_slug}}/floor",
+        f"{mediamtx_rtsp_base}/{event_slug}/floor",
         env=env,
         stdout=asyncio.subprocess.DEVNULL,
         stderr=asyncio.subprocess.DEVNULL
