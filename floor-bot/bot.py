@@ -77,96 +77,110 @@ async def run_capture():
         "-L", "module-always-sink"
     ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     
-    await asyncio.sleep(2)
-    
-    env = os.environ.copy()
-    env["PULSE_SERVER"] = f"unix:{pulse_socket}"
-    
-    pw = await async_playwright().start()
-    
-    browser = await pw.chromium.launch(
-        headless=True,
-        env=env,
-        ignore_default_args=["--mute-audio"],
-        args=[
-            "--use-fake-ui-for-media-stream",
-            "--use-fake-device-for-media-stream",
-            "--disable-gesture-requirement-for-media-playback",
-            "--ignore-certificate-errors",
-            "--unsafely-treat-insecure-origin-as-secure=https://jitsi-web",
-            "--autoplay-policy=no-user-gesture-required",
-            "--no-sandbox",
-            "--disable-setuid-sandbox",
-            "--disable-dev-shm-usage"
-        ]
-    )
-    
-    context = await browser.new_context(
-        permissions=["microphone", "camera"],
-        ignore_https_errors=True
-    )
-    
-    page = await context.new_page()
-    page.on("console", lambda m: print(f"Browser: {m.text}"))
-    page.on("pageerror", lambda err: print(f"Browser Error: {err}"))
-    
-    import urllib.parse
-    display_name = urllib.parse.quote('"VoxBento FloorBot"')
-    
-    join_url = (
-        f"{jitsi_url}"
-        f"#config.startWithAudioMuted=false"
-        f"&config.startWithVideoMuted=true"
-        f"&config.prejoinPageEnabled=false"
-        f"&config.disableDeepLinking=true"
-        f"&config.p2p.enabled=false"
-        f"&config.requireDisplayName=false"
-        f"&userInfo.displayName={display_name}"
-    )
-    
-    print(f"Joining: {join_url}")
-    await page.goto(join_url)
-    
-    await asyncio.sleep(5)
-    
-    try:
-        await page.click("div[aria-label='Join meeting']", timeout=5000)
-        print("Clicked Join Meeting dialog")
-    except Exception:
-        pass
+    pw = None
+    browser = None
+    ffmpeg_proc = None
 
-    ffmpeg_proc = await asyncio.create_subprocess_exec(
-        "ffmpeg", "-y",
-        "-f", "pulse",
-        "-i", f"{sink_name}.monitor",
-        "-ac", "1",
-        "-ar", "16000",
-        "-c:a", "libopus",
-        "-b:a", "32k",
-        "-vbr", "on",
-        "-compression_level", "10",
-        "-application", "lowdelay",
-        "-f", "rtsp",
-        "-rtsp_transport", "tcp",
-        f"{mediamtx_rtsp_base}/{event_slug}/floor",
-        env=env,
-        stdout=asyncio.subprocess.DEVNULL,
-        stderr=asyncio.subprocess.DEVNULL
-    )
-    
     try:
+        await asyncio.sleep(2)
+        
+        env = os.environ.copy()
+        env["PULSE_SERVER"] = f"unix:{pulse_socket}"
+        
+        pw = await async_playwright().start()
+        
+        browser = await pw.chromium.launch(
+            headless=True,
+            env=env,
+            ignore_default_args=["--mute-audio"],
+            args=[
+                "--use-fake-ui-for-media-stream",
+                "--use-fake-device-for-media-stream",
+                "--disable-gesture-requirement-for-media-playback",
+                "--ignore-certificate-errors",
+                "--unsafely-treat-insecure-origin-as-secure=https://jitsi-web",
+                "--autoplay-policy=no-user-gesture-required",
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+                "--disable-dev-shm-usage"
+            ]
+        )
+        
+        context = await browser.new_context(
+            permissions=["microphone", "camera"],
+            ignore_https_errors=True
+        )
+        
+        page = await context.new_page()
+        page.on("console", lambda m: print(f"Browser: {m.text}"))
+        page.on("pageerror", lambda err: print(f"Browser Error: {err}"))
+        
+        import urllib.parse
+        display_name = urllib.parse.quote('"VoxBento FloorBot"')
+        
+        join_url = (
+            f"{jitsi_url}"
+            f"#config.startWithAudioMuted=false"
+            f"&config.startWithVideoMuted=true"
+            f"&config.prejoinPageEnabled=false"
+            f"&config.disableDeepLinking=true"
+            f"&config.p2p.enabled=false"
+            f"&config.requireDisplayName=false"
+            f"&userInfo.displayName={display_name}"
+        )
+        
+        print(f"Joining: {join_url}")
+        await page.goto(join_url)
+        
+        await asyncio.sleep(5)
+        
+        try:
+            await page.click("div[aria-label='Join meeting']", timeout=5000)
+            print("Clicked Join Meeting dialog")
+        except Exception:
+            pass
+
+        ffmpeg_proc = await asyncio.create_subprocess_exec(
+            "ffmpeg", "-y",
+            "-f", "pulse",
+            "-i", f"{sink_name}.monitor",
+            "-ac", "1",
+            "-ar", "16000",
+            "-c:a", "libopus",
+            "-b:a", "32k",
+            "-vbr", "on",
+            "-compression_level", "10",
+            "-application", "lowdelay",
+            "-f", "rtsp",
+            "-rtsp_transport", "tcp",
+            f"{mediamtx_rtsp_base}/{event_slug}/floor",
+            env=env,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL
+        )
+        
         await ffmpeg_proc.wait()
+
     except asyncio.CancelledError:
-        pass
+        print("run_capture cancelled")
     finally:
-        if ffmpeg_proc.returncode is None:
+        if ffmpeg_proc is not None and ffmpeg_proc.returncode is None:
             ffmpeg_proc.terminate()
-        await browser.close()
-        await pw.stop()
+            try:
+                await ffmpeg_proc.wait()
+            except:
+                pass
+        if browser is not None:
+            await browser.close()
+        if pw is not None:
+            await pw.stop()
         if pulse_proc.poll() is None:
             pulse_proc.terminate()
         if os.path.exists(pulse_socket):
-            os.remove(pulse_socket)
+            try:
+                os.remove(pulse_socket)
+            except OSError:
+                pass
             
 asyncio.run(run_capture())
 """
@@ -177,7 +191,8 @@ asyncio.run(run_capture())
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
-                bufsize=1
+                bufsize=1,
+                env=env
             )
             
             def log_stream(stream, prefix):
