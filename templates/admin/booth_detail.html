@@ -180,8 +180,8 @@
           <option value="claude-3-haiku-20240307" data-trans-provider="anthropic" {% if booth.translation_model == 'claude-3-haiku-20240307' %}selected{% endif %}>Anthropic: claude-3-haiku</option>
           <option value="claude-3-5-sonnet-20240620" data-trans-provider="anthropic" {% if booth.translation_model == 'claude-3-5-sonnet-20240620' %}selected{% endif %}>Anthropic: claude-3.5-sonnet</option>
           <option value="gemini-1.5-flash" data-trans-provider="gemini" {% if booth.translation_model == 'gemini-1.5-flash' %}selected{% endif %}>Gemini: 1.5 Flash</option>
-          <option value="llama3-8b-8192" data-trans-provider="groq" {% if booth.translation_model == 'llama3-8b-8192' %}selected{% endif %}>Groq: LLaMA3 8B</option>
-          <option value="llama3-70b-8192" data-trans-provider="groq" {% if booth.translation_model == 'llama3-70b-8192' %}selected{% endif %}>Groq: LLaMA3 70B</option>
+          <option value="llama-3.1-8b-instant" data-trans-provider="groq" {% if booth.translation_model == 'llama-3.1-8b-instant' %}selected{% endif %}>Groq: LLaMA 3.1 8B</option>
+          <option value="llama-3.3-70b-versatile" data-trans-provider="groq" {% if booth.translation_model == 'llama-3.3-70b-versatile' %}selected{% endif %}>Groq: LLaMA 3.3 70B</option>
           <option value="mixtral-8x7b-32768" data-trans-provider="groq" {% if booth.translation_model == 'mixtral-8x7b-32768' %}selected{% endif %}>Groq: Mixtral 8x7B</option>
           <option value="anthropic/claude-3-haiku" data-trans-provider="openrouter" {% if booth.translation_model == 'anthropic/claude-3-haiku' %}selected{% endif %}>OpenRouter: Claude 3 Haiku</option>
           <option value="meta-llama/llama-3-8b-instruct" data-trans-provider="openrouter" {% if booth.translation_model == 'meta-llama/llama-3-8b-instruct' %}selected{% endif %}>OpenRouter: LLaMA 3 8B</option>
