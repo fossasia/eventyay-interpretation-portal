@@ -293,23 +293,6 @@
       return;
     }
     
-    var room = roomsData.find(r => r.id === roomId);
-    if (room && room.floor_translation_enabled && room.translation_languages.length > 0) {
-      captionModeSelect.disabled = false;
-      translationLangSelect.innerHTML = '';
-      room.translation_languages.forEach(lang => {
-        var opt = document.createElement('option');
-        opt.value = lang.code;
-        opt.textContent = lang.name;
-        translationLangSelect.appendChild(opt);
-      });
-    } else {
-      captionModeSelect.disabled = true;
-      captionModeSelect.value = 'original';
-      translationLangSelect.innerHTML = '';
-    }
-    updateCaptionLayout();
-    
     languageSelect.disabled = false;
     var roomBooths = boothsData.filter(function(b) { return b.room_id === roomId; });
     
@@ -317,9 +300,21 @@
       var opt = document.createElement('option');
       opt.value = b.whep_url;
       opt.textContent = b.language_name;
-      opt.dataset.boothId = '{{ event.slug }}-' + b.language_code;
+      // b.language_code here is "floor" for floor audio
+      if (b.language_code === 'floor') {
+        opt.dataset.boothId = '{{ event.slug }}-floor';
+      } else {
+        opt.dataset.boothId = '{{ event.slug }}-' + b.language_code;
+      }
+      opt.dataset.boothObjId = b.id;
       languageSelect.appendChild(opt);
     });
+    
+    // Reset translation dropdown until language is selected
+    captionModeSelect.disabled = true;
+    captionModeSelect.value = 'original';
+    translationLangSelect.innerHTML = '';
+    updateCaptionLayout();
   });
 
   languageSelect.addEventListener('change', function() {
@@ -327,6 +322,31 @@
     var whepUrl = this.value;
     var selectedOpt = this.options[this.selectedIndex];
     var boothId = selectedOpt ? selectedOpt.dataset.boothId : null;
+    var boothObjId = selectedOpt ? selectedOpt.dataset.boothObjId : null;
+    
+    // Setup translation options based on the selected audio source
+    if (boothObjId) {
+      var bData = boothsData.find(b => b.id.toString() === boothObjId.toString());
+      if (bData && bData.translation_enabled && bData.translation_languages && bData.translation_languages.length > 0) {
+        captionModeSelect.disabled = false;
+        translationLangSelect.innerHTML = '';
+        bData.translation_languages.forEach(lang => {
+          var opt = document.createElement('option');
+          opt.value = lang.code;
+          opt.textContent = lang.name;
+          translationLangSelect.appendChild(opt);
+        });
+      } else {
+        captionModeSelect.disabled = true;
+        captionModeSelect.value = 'original';
+        translationLangSelect.innerHTML = '';
+      }
+    } else {
+      captionModeSelect.disabled = true;
+      captionModeSelect.value = 'original';
+      translationLangSelect.innerHTML = '';
+    }
+    updateCaptionLayout();
     
     if (whepUrl) {
       setStatus('Connecting...', 'recovering');

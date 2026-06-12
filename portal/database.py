@@ -201,16 +201,18 @@ async def create_booth(
 
 
 async def get_booth_by_id(session: AsyncSession, booth_id: int) -> DBBooth | None:
+    from sqlalchemy.orm import selectinload
     result = await session.execute(
-        select(DBBooth).options(joinedload(DBBooth.event)).where(DBBooth.id == booth_id),
+        select(DBBooth).options(joinedload(DBBooth.event), selectinload(DBBooth.translation_languages)).where(DBBooth.id == booth_id),
     )
     return result.scalar_one_or_none()
 
 
 async def list_booths_for_event(session: AsyncSession, event_id: int) -> list[DBBooth]:
+    from sqlalchemy.orm import selectinload
     result = await session.execute(
         select(DBBooth)
-        .options(joinedload(DBBooth.event))
+        .options(joinedload(DBBooth.event), selectinload(DBBooth.translation_languages))
         .where(DBBooth.event_id == event_id)
         .order_by(DBBooth.language_code),
     )
@@ -218,9 +220,10 @@ async def list_booths_for_event(session: AsyncSession, event_id: int) -> list[DB
 
 
 async def list_booths_for_room(session: AsyncSession, room_id: int) -> list[DBBooth]:
+    from sqlalchemy.orm import selectinload
     result = await session.execute(
         select(DBBooth)
-        .options(joinedload(DBBooth.event))
+        .options(joinedload(DBBooth.event), selectinload(DBBooth.translation_languages))
         .where(DBBooth.room_id == room_id)
         .order_by(DBBooth.language_code),
     )

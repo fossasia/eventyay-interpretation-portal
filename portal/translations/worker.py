@@ -21,15 +21,37 @@ class TranslationWorker:
         """Called when a finalized STT segment is saved. Fires off LLM requests for enabled target languages."""
         from sqlalchemy import select
         from sqlalchemy.orm import selectinload
+        from portal.models import TranscriptSegment, DBBooth
         
         async with get_session() as session:
-            room = await session.scalar(select(Room).options(selectinload(Room.translation_languages)).where(Room.id == room_id))
-            if not room or not room.floor_translation_enabled:
+            segment = await session.scalar(select(TranscriptSegment).where(TranscriptSegment.id == segment_id))
+            if not segment:
                 return
+                
+            provider = None
+            model = None
+            enabled_langs = []
+            room = None
+            
+            if segment.booth_id is None:
+                # Floor translation
+                room = await session.scalar(select(Room).options(selectinload(Room.translation_languages)).where(Room.id == room_id))
+                if not room or not room.floor_translation_enabled:
+                    return
+                provider = room.floor_translation_provider
+                model = room.floor_translation_model
+                enabled_langs = [lang for lang in room.translation_languages if lang.enabled]
+            else:
+                # Booth translation
+                booth = await session.scalar(select(DBBooth).options(selectinload(DBBooth.translation_languages)).where(DBBooth.id == segment.booth_id))
+                if not booth or not booth.translation_enabled:
+                    return
+                provider = booth.translation_provider
+                model = booth.translation_model
+                enabled_langs = [lang for lang in booth.translation_languages if lang.enabled]
+                room = await session.scalar(select(Room).where(Room.id == room_id))
 
-            provider = room.floor_translation_provider
-            model = room.floor_translation_model
-            if not provider or not model:
+            if not provider or not model or not enabled_langs or not room:
                 return
                 
             event = await session.scalar(select(Event).where(Event.id == room.event_id))
@@ -39,11 +61,6 @@ class TranslationWorker:
             api_key = self._get_translation_api_key(event, provider)
             if not api_key and provider != TranslationProviderEnum.LOCAL.value:
                 logger.error(f"[{booth_id_str}] Translation API key not found for provider {provider}")
-                return
-
-            # Get enabled target languages
-            enabled_langs = [lang for lang in room.translation_languages if lang.enabled]
-            if not enabled_langs:
                 return
 
             # Execute translation for all target languages concurrently

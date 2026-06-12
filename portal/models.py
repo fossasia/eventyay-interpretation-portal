@@ -146,10 +146,17 @@ class DBBooth(Base):
     transcription_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default='0')
     transcription_provider: Mapped[str] = mapped_column(String(20), default='local', server_default=sa.text("'local'"))
     transcription_model: Mapped[str] = mapped_column(String(20), default='tiny', server_default=sa.text("'tiny'"))
+    
+    # Translation Settings
+    translation_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default='0')
+    translation_provider: Mapped[str | None] = mapped_column(String(50), nullable=True, default=None)
+    translation_model: Mapped[str | None] = mapped_column(String(100), nullable=True, default=None)
+    
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
     event: Mapped[Event] = relationship(back_populates='booths')
     room: Mapped[Room] = relationship(back_populates='booths', foreign_keys=[room_id])
+    translation_languages: Mapped[list['BoothTranslationLanguage']] = relationship(back_populates='booth', cascade='all, delete-orphan')
     invite_tokens: Mapped[list[InviteToken]] = relationship(
         back_populates='booth', cascade='all, delete-orphan',
     )
@@ -216,6 +223,25 @@ class RoomTranslationLanguage(Base):
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default='1')
     
     room: Mapped[Room] = relationship(back_populates='translation_languages')
+
+
+# ---------------------------------------------------------------------------
+# BoothTranslationLanguage
+# ---------------------------------------------------------------------------
+
+class BoothTranslationLanguage(Base):
+    __tablename__ = 'booth_translation_languages'
+    __table_args__ = (
+        Index('ix_translation_booth_language', 'booth_id', 'language_code', unique=True),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    booth_id: Mapped[int] = mapped_column(ForeignKey('booths.id', ondelete='CASCADE'))
+    language_code: Mapped[str] = mapped_column(String(20))
+    language_name: Mapped[str] = mapped_column(String(100))
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default='1')
+    
+    booth: Mapped['DBBooth'] = relationship(back_populates='translation_languages')
 
 
 # ---------------------------------------------------------------------------
