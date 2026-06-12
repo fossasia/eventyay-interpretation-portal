@@ -53,7 +53,7 @@ const config: Config = {
       title: 'VoxBento',
       logo: {
         alt: 'VoxBento Logo',
-        src: 'img/wordmark.png',
+        src: 'img/icon_only.png',
       },
       items: [
         {
