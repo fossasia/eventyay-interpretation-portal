@@ -53,13 +53,22 @@
   </div>
 
   <div class="token-form-card" style="margin-bottom: 2rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <div>
+        <h3 style="margin: 0;">Stored Transcripts</h3>
+        <p class="form-help" style="margin-top: 0.25rem; font-size: 0.85rem; color: #666;">View and download past transcripts and translations generated for this room.</p>
+      </div>
+      <a href="/admin/events/{{ event.id }}/rooms/{{ room.id }}/transcripts/" class="btn btn-primary">View Transcripts</a>
+    </div>
+  </div>
+
+  <div class="token-form-card" style="margin-bottom: 2rem;">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
       <h3 style="margin: 0;">Floor Audio Transcription</h3>
       <div style="display: flex; gap: 0.5rem;">
-        <a href="/admin/events/{{ event.id }}/rooms/{{ room.id }}/transcripts/" class="btn btn-sm btn-outline" style="border-color: #007bff; color: #007bff;">View Transcripts</a>
         {% if room.floor_transcription_enabled %}
           <button type="button" class="btn btn-sm btn-outline" id="start-bot-btn" onclick="startFloorTranscription({{ room.id }})">Start Bot</button>
-          <button type="button" class="btn btn-sm btn-danger" id="stop-bot-btn" onclick="stopFloorTranscription({{ room.id }})">Stop Bot</button>
+          <button type="button" class="btn btn-sm btn-outline" style="border-color: #dc3545; color: #dc3545;" id="stop-bot-btn" onclick="stopFloorTranscription({{ room.id }})">Stop Bot</button>
         {% endif %}
       </div>
     </div>
