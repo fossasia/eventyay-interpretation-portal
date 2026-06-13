@@ -12,8 +12,9 @@ class CaptionState:
     current_word_count: int = 0
 
 class CaptionAggregator:
-    def __init__(self, broadcast_callback):
+    def __init__(self, broadcast_callback, room_id: int | None = None):
         self.broadcast_callback = broadcast_callback
+        self.room_id = room_id
         self.states: dict[str, CaptionState] = {}
         
     def _get_state(self, booth_id: str) -> CaptionState:
@@ -127,6 +128,19 @@ class CaptionAggregator:
             "status": "final",
             "text": final_text
         })
+        
+        if self.room_id is not None:
+            import asyncio
+            from portal.database import save_transcript_segment
+            
+            async def _save_and_translate():
+                segment_id = await save_transcript_segment(booth_id, final_text, self.room_id)
+                if segment_id is not None:
+                    from portal.translations.worker import TranslationWorker
+                    worker = TranslationWorker(self.broadcast_callback)
+                    await worker.handle_translation(self.room_id, segment_id, final_text, booth_id)
+                    
+            asyncio.create_task(_save_and_translate())
         
         # Reset state for next utterance
         state.current_utterance = ""

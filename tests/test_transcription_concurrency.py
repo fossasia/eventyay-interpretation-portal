@@ -38,7 +38,7 @@ class MockProvider:
     async def process_chunk(self, chunk, language_code, model_variant, config):
         pass
 
-    async def run_stream(self, process, language_code, model_variant, config, broadcast_callback, booth_id):
+    async def run_stream(self, process, language_code, model_variant, config, broadcast_callback, booth_id, room_id=None):
         # Log the config key to assert cross-contamination did not occur
         self.received_configs.append({
             "booth_id": booth_id,

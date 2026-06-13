@@ -26,9 +26,11 @@ MAX_TOTAL_WORKERS = 10
 active_workers: Dict[str, Dict[str, Any]] = {}
 active_processes: Dict[str, asyncio.subprocess.Process] = {}
 
-async def transcription_worker(event_slug: str, language_code: str, booth_id: str, broadcast_callback, provider_name: str, model_size: str, config: ProviderConfig):
+from portal.config import settings
+
+async def transcription_worker(event_slug: str, language_code: str, booth_id: str, broadcast_callback, provider_name: str, model_size: str, config: ProviderConfig, transcription_language: str | None = None, room_id: int | None = None):
     logger.info(f"Starting {provider_name} transcription worker for booth {booth_id}")
-    rtsp_url = f"rtsp://mediamtx:8554/{event_slug}/{language_code}"
+    rtsp_url = f"{settings.mediamtx_rtsp_base}/{event_slug}/{language_code}"
     
     provider = PROVIDERS.get(provider_name, PROVIDERS['local'])
     
@@ -68,7 +70,8 @@ async def transcription_worker(event_slug: str, language_code: str, booth_id: st
             active_workers[booth_id]["stderr_task"] = stderr_task
     
     try:
-        await provider.run_stream(process, language_code, model_size, config, broadcast_callback, booth_id)
+        actual_language = transcription_language or language_code
+        await provider.run_stream(process, actual_language, model_size, config, broadcast_callback, booth_id, room_id)
     except asyncio.IncompleteReadError:
         logger.error(f"[{booth_id}] ffmpeg stream ended abruptly.")
     except asyncio.CancelledError:
@@ -97,7 +100,7 @@ async def transcription_worker(event_slug: str, language_code: str, booth_id: st
                 pass
         logger.info(f"[{booth_id}] Transcription worker exited.")
 
-async def start_transcription_worker(event_slug: str, language_code: str, booth_id: str, broadcast_callback, provider: str, model_size: str, config: ProviderConfig):
+async def start_transcription_worker(event_slug: str, language_code: str, booth_id: str, broadcast_callback, provider: str, model_size: str, config: ProviderConfig, transcription_language: str | None = None, room_id: int | None = None):
     async with active_workers_lock:
         if booth_id in active_workers:
             logger.info(f"Transcription worker for {booth_id} is already running.")
@@ -111,7 +114,7 @@ async def start_transcription_worker(event_slug: str, language_code: str, booth_
             increment_model_ref(model_size)
             start_eviction_loop()
 
-        task = asyncio.create_task(transcription_worker(event_slug, language_code, booth_id, broadcast_callback, provider, model_size, config))
+        task = asyncio.create_task(transcription_worker(event_slug, language_code, booth_id, broadcast_callback, provider, model_size, config, transcription_language, room_id))
         active_workers[booth_id] = {
             "task": task,
             "provider": provider,

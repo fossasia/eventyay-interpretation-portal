@@ -604,16 +604,48 @@ async def listen_event_page(
     ensure_tasks = []
     for b in db_booths:
         channel_id = b.mediamtx_path
+        booth_lang_data = [
+            {"code": l.language_code, "name": l.language_name} 
+            for l in b.translation_languages if l.enabled
+        ]
         booths_data.append({
             'id': b.id,
             'room_id': b.room_id,
             'language_code': b.language_code,
             'language_name': b.language_name,
             'channel_id': channel_id,
-            'whep_url': f'{settings.mediamtx_whip_base}/{channel_id}/whep'
+            'whep_url': f'{settings.mediamtx_whip_base}/{channel_id}/whep',
+            'translation_enabled': getattr(b, 'translation_enabled', False),
+            'translation_languages': booth_lang_data
         })
         ensure_tasks.append(_ensure_mediamtx_path(channel_id))
         
+    rooms_data = []
+    for r in rooms:
+        lang_data = [
+            {"code": l.language_code, "name": l.language_name} 
+            for l in r.translation_languages if l.enabled
+        ]
+        rooms_data.append({
+            'id': r.id,
+            'floor_translation_enabled': r.floor_translation_enabled,
+            'translation_languages': lang_data
+        })
+        
+        if r.floor_transcription_enabled:
+            channel_id = f"{ev.slug}/floor"
+            booths_data.append({
+                'id': f"floor_{r.id}",
+                'room_id': r.id,
+                'language_code': "floor",
+                'language_name': "🌍 Floor Audio (Original)",
+                'channel_id': channel_id,
+                'whep_url': f'{settings.mediamtx_whip_base}/{channel_id}/whep',
+                'translation_enabled': r.floor_translation_enabled,
+                'translation_languages': lang_data
+            })
+            ensure_tasks.append(_ensure_mediamtx_path(channel_id))
+            
     if ensure_tasks:
         await asyncio.gather(*ensure_tasks)
 
@@ -623,6 +655,7 @@ async def listen_event_page(
         {
             'event': ev,
             'rooms': rooms,
+            'rooms_json': json.dumps(rooms_data),
             'booths_json': json.dumps(booths_data),
             'js_version': _JS_CACHE_BUST,
         },
@@ -1180,6 +1213,17 @@ async def admin_event_api_settings_post(
     clear_deepgram_api_key: bool | None = Form(False),
     clear_nvidia_api_key: bool | None = Form(False),
     clear_elevenlabs_api_key: bool | None = Form(False),
+    
+    translation_openai_api_key: str | None = Form(None),
+    openrouter_api_key: str | None = Form(None),
+    gemini_api_key: str | None = Form(None),
+    anthropic_api_key: str | None = Form(None),
+    groq_api_key: str | None = Form(None),
+    clear_translation_openai_api_key: bool | None = Form(False),
+    clear_openrouter_api_key: bool | None = Form(False),
+    clear_gemini_api_key: bool | None = Form(False),
+    clear_anthropic_api_key: bool | None = Form(False),
+    clear_groq_api_key: bool | None = Form(False),
 ):
     from portal.database import get_session, get_event_by_id
     from portal.crypto import encrypt_val
@@ -1211,6 +1255,32 @@ async def admin_event_api_settings_post(
                 event.encrypted_elevenlabs_api_key = None
             elif elevenlabs_api_key and elevenlabs_api_key.strip():
                 event.encrypted_elevenlabs_api_key = encrypt_val(elevenlabs_api_key.strip())
+                
+            if clear_translation_openai_api_key:
+                event.encrypted_translation_openai_api_key = None
+            elif translation_openai_api_key and translation_openai_api_key.strip():
+                event.encrypted_translation_openai_api_key = encrypt_val(translation_openai_api_key.strip())
+
+            if clear_openrouter_api_key:
+                event.encrypted_openrouter_api_key = None
+            elif openrouter_api_key and openrouter_api_key.strip():
+                event.encrypted_openrouter_api_key = encrypt_val(openrouter_api_key.strip())
+
+            if clear_gemini_api_key:
+                event.encrypted_gemini_api_key = None
+            elif gemini_api_key and gemini_api_key.strip():
+                event.encrypted_gemini_api_key = encrypt_val(gemini_api_key.strip())
+
+            if clear_anthropic_api_key:
+                event.encrypted_anthropic_api_key = None
+            elif anthropic_api_key and anthropic_api_key.strip():
+                event.encrypted_anthropic_api_key = encrypt_val(anthropic_api_key.strip())
+
+            if clear_groq_api_key:
+                event.encrypted_groq_api_key = None
+            elif groq_api_key and groq_api_key.strip():
+                event.encrypted_groq_api_key = encrypt_val(groq_api_key.strip())
+                
         except (ValueError, RuntimeError) as e:
             raise HTTPException(status_code=400, detail=f"API Key encryption failed: {e}")
         
@@ -1305,33 +1375,236 @@ async def admin_room_detail(request: Request, event_id: int, room_id: int):
     room_id_str = f"Voxbento-{event.slug}-{clean_name}"
     fallback_jitsi_url = _make_jitsi_url(settings.effective_jitsi_base_url, room_id_str)
 
+    import pycountry
+    # Get ISO 639-1 languages
+    translation_languages_dataset = [
+        {"code": lang.alpha_2, "name": lang.name}
+        for lang in pycountry.languages if hasattr(lang, 'alpha_2')
+    ]
+    translation_languages_dataset.sort(key=lambda x: x["name"])
+    
+    enabled_translation_language_codes = [lang.language_code for lang in room.translation_languages if lang.enabled]
+
     return templates.TemplateResponse(request, 'admin/room_detail.html', {
         'event': event,
         'room': room,
         'booths': booth_statuses,
         'fallback_jitsi_url': fallback_jitsi_url,
+        'translation_languages_dataset': translation_languages_dataset,
+        'enabled_translation_language_codes': enabled_translation_language_codes,
+    })
+
+
+@app.get('/admin/events/{event_id}/rooms/{room_id}/transcripts/', dependencies=[Depends(require_admin)])
+async def admin_room_transcripts(request: Request, event_id: int, room_id: int):
+    from portal.database import get_session, get_event_by_id, get_room_by_id, list_booths_for_room
+    
+    async with get_session() as session:
+        event = await get_event_by_id(session, event_id)
+        if event is None:
+            raise HTTPException(status_code=404, detail='Event not found.')
+        room = await get_room_by_id(session, room_id)
+        if room is None:
+            raise HTTPException(status_code=404, detail='Room not found.')
+        
+        booths = await list_booths_for_room(session, room_id)
+        
+    return templates.TemplateResponse(request, 'admin/room_transcripts.html', {
+        'event': event,
+        'room': room,
+        'booths': booths
     })
 
 
 @app.post('/admin/events/{event_id}/rooms/{room_id}/edit', dependencies=[Depends(require_admin)])
 async def admin_edit_room(request: Request, event_id: int, room_id: int):
     from portal.database import get_session, get_room_by_id
+    from portal.models import RoomTranslationLanguage
+    import pycountry
+
     form = await request.form()
     jitsi_url = form.get('jitsi_url', '').strip()
     relay_booth_id_str = form.get('relay_booth_id', '').strip()
     relay_booth_id = int(relay_booth_id_str) if relay_booth_id_str and relay_booth_id_str.lower() != 'none' else None
+    
+    floor_transcription_enabled = form.get('floor_transcription_enabled') == 'on'
+    floor_transcription_provider = form.get('floor_transcription_provider', 'local').strip()
+    floor_transcription_model = form.get('floor_transcription_model', 'tiny').strip()
+    floor_language_code = form.get('floor_language_code', '').strip() or None
+    
+    floor_translation_enabled = form.get('floor_translation_enabled') == 'on'
+    floor_translation_provider = form.get('floor_translation_provider', '').strip() or None
+    floor_translation_model = form.get('floor_translation_model', '').strip() or None
+    
+    floor_translation_languages = form.getlist('floor_translation_languages')
     
     async with get_session() as session:
         room = await get_room_by_id(session, room_id)
         if room and room.event_id == event_id:
             room.jitsi_url = jitsi_url if jitsi_url else None
             room.relay_booth_id = relay_booth_id
+            room.floor_transcription_enabled = floor_transcription_enabled
+            room.floor_transcription_provider = floor_transcription_provider
+            room.floor_transcription_model = floor_transcription_model
+            room.floor_language_code = floor_language_code
+            
+            room.floor_translation_enabled = floor_translation_enabled
+            room.floor_translation_provider = floor_translation_provider
+            room.floor_translation_model = floor_translation_model
+            
+            # Sync target languages
+            existing_langs = {lang.language_code: lang for lang in room.translation_languages}
+            requested_codes = set(floor_translation_languages)
+            
+            # Disable existing that are no longer requested
+            for code, lang in existing_langs.items():
+                if code not in requested_codes:
+                    lang.enabled = False
+            
+            # Add or enable requested
+            for code in requested_codes:
+                if code in existing_langs:
+                    existing_langs[code].enabled = True
+                else:
+                    lang_obj = pycountry.languages.get(alpha_2=code)
+                    lang_name = lang_obj.name if lang_obj else code
+                    new_lang = RoomTranslationLanguage(
+                        room_id=room_id,
+                        language_code=code,
+                        language_name=lang_name,
+                        enabled=True
+                    )
+                    session.add(new_lang)
+
             await session.commit()
             
     return safe_redirect(
         url=f'/admin/events/{event_id}/rooms/{room_id}/',
         status_code=status.HTTP_303_SEE_OTHER,
     )
+
+@app.get('/api/admin/providers/translation/models', dependencies=[Depends(require_admin)])
+async def get_translation_models():
+    from portal.translations.constants import TRANSLATION_MODELS
+    return TRANSLATION_MODELS
+
+import httpx
+import logging
+from portal.config import settings
+
+logger = logging.getLogger(__name__)
+
+@app.post('/api/rooms/{room_id}/floor-transcription/start', dependencies=[Depends(require_admin)])
+async def api_start_floor_transcription(room_id: int):
+    from portal.database import get_session, get_room_by_id, get_event_by_id
+    from portal.transcription.worker import start_transcription_worker
+    
+    async with get_session() as session:
+        room = await get_room_by_id(session, room_id)
+        if not room or not room.floor_transcription_enabled:
+            raise HTTPException(status_code=400, detail="Floor transcription not enabled or invalid room")
+        event = await get_event_by_id(session, room.event_id)
+        if not event:
+            raise HTTPException(status_code=400, detail="Event not found")
+            
+        event_slug = event.slug
+        
+        import re
+        clean_name = re.sub(r'[^a-zA-Z0-9]+', '', room.display_name)
+        room_id_str = f"Voxbento-{event.slug}-{clean_name}"
+        
+        if room.jitsi_url:
+            jitsi_url = room.jitsi_url
+            import urllib.parse
+            parsed = urllib.parse.urlparse(room.jitsi_url)
+            internal_parsed = urllib.parse.urlparse(settings.effective_jitsi_internal_base)
+            base_parsed = urllib.parse.urlparse(settings.effective_jitsi_base_url)
+            
+            if parsed.netloc in ("jitsi.voxbento.com", base_parsed.netloc) or parsed.netloc.startswith(("localhost", "127.0.0.1")):
+                parsed = parsed._replace(scheme=internal_parsed.scheme, netloc=internal_parsed.netloc)
+                jitsi_url = urllib.parse.urlunparse(parsed)
+            else:
+                jitsi_url = room.jitsi_url
+        else:
+            jitsi_url = f"{settings.effective_jitsi_internal_base}/{room_id_str}"
+            
+        floor_language_code = room.floor_language_code
+    
+    # 1. Start floor-bot subprocess
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                f"{settings.floor_bot_base}/start",
+                json={
+                    "event_slug": event_slug,
+                    "jitsi_url": jitsi_url,
+                    "mediamtx_rtsp_base": settings.mediamtx_rtsp_base
+                },
+                timeout=10.0
+            )
+            resp.raise_for_status()
+    except Exception as e:
+        logger.error(f"Failed to start floor-bot: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to start floor bot: {e}")
+        
+    # 2. Start transcription worker reading from {event_slug}/floor via RTSP
+    # We use {event_slug}-floor as the pseudo booth_id, and floor_language_code for the provider.
+    from portal.transcription import ProviderConfig, get_api_key, ProviderEnum
+    try:
+        api_key = get_api_key(event, ProviderEnum(room.floor_transcription_provider))
+        config = ProviderConfig(api_key=api_key)
+        
+        await start_transcription_worker(
+            event_slug=event_slug,
+            language_code="floor", # Tells aggregator this is floor audio path
+            booth_id=f"{event_slug}-floor",
+            broadcast_callback=broadcast_transcription,
+            provider=room.floor_transcription_provider,
+            model_size=room.floor_transcription_model,
+            config=config,
+            transcription_language=room.floor_language_code,
+            room_id=room_id
+        )
+    except Exception as e:
+        logger.error(f"Failed to start transcription worker: {e}")
+        # Rollback bot if worker fails to start
+        async with httpx.AsyncClient() as client:
+            await client.post(f"{settings.floor_bot_base}/stop", json={"event_slug": event_slug})
+        raise HTTPException(status_code=500, detail=f"Failed to start transcription worker: {e}")
+        
+    return {"status": "started"}
+
+@app.post('/api/rooms/{room_id}/floor-transcription/stop', dependencies=[Depends(require_admin)])
+async def api_stop_floor_transcription(room_id: int):
+    from portal.database import get_session, get_room_by_id, get_event_by_id
+    from portal.transcription.worker import stop_transcription_worker
+    
+    async with get_session() as session:
+        room = await get_room_by_id(session, room_id)
+        if not room:
+            raise HTTPException(status_code=400, detail="Invalid room")
+        event = await get_event_by_id(session, room.event_id)
+        if not event:
+            raise HTTPException(status_code=400, detail="Event not found")
+            
+        event_slug = event.slug
+    
+    # 1. Stop floor-bot
+    try:
+        async with httpx.AsyncClient() as client:
+            await client.post(
+                f"{settings.floor_bot_base}/stop",
+                json={"event_slug": event_slug},
+                timeout=5.0
+            )
+    except Exception as e:
+        logger.error(f"Failed to stop floor-bot: {e}")
+        # Continue to try stopping the worker even if bot fails
+        
+    # 2. Stop transcription worker
+    stop_transcription_worker(f"{event_slug}-floor")
+    
+    return {"status": "stopped"}
 
 
 @app.post('/admin/events/{event_id}/rooms/{room_id}/delete', dependencies=[Depends(require_admin)])
@@ -1437,6 +1710,16 @@ async def admin_booth_detail(request: Request, event_id: int, room_id: int, boot
     if mem_booth and mem_booth.active_interpreter_id:
         active_interpreter = mem_booth.participants.get(mem_booth.active_interpreter_id)
 
+    import pycountry
+    # Get ISO 639-1 languages
+    translation_languages_dataset = [
+        {"code": lang.alpha_2, "name": lang.name}
+        for lang in pycountry.languages if hasattr(lang, 'alpha_2')
+    ]
+    translation_languages_dataset.sort(key=lambda x: x["name"])
+    
+    enabled_translation_language_codes = [lang.language_code for lang in db_booth.translation_languages if lang.enabled]
+
     return templates.TemplateResponse(request, 'admin/booth_detail.html', {
         'event': event,
         'room': room,
@@ -1451,6 +1734,8 @@ async def admin_booth_detail(request: Request, event_id: int, room_id: int, boot
         'users': users,
         'memberships': memberships,
         'membership_map': membership_map,
+        'translation_languages_dataset': translation_languages_dataset,
+        'enabled_translation_language_codes': enabled_translation_language_codes,
     })
 
 
@@ -1514,6 +1799,76 @@ async def admin_delete_booth(request: Request, event_id: int, room_id: int, boot
         await delete_booth(session, booth_id)
     return safe_redirect(
         url=f'/admin/events/{event_id}/rooms/{room_id}/booths/',
+        status_code=status.HTTP_303_SEE_OTHER,
+    )
+
+
+@app.post(
+    '/admin/events/{event_id}/rooms/{room_id}/booths/{booth_id}/translation-settings',
+    dependencies=[Depends(require_admin)],
+)
+async def admin_booth_translation_settings(
+    request: Request,
+    event_id: int,
+    room_id: int,
+    booth_id: int,
+    translation_enabled: bool | None = Form(False),
+    translation_provider: str = Form('openai'),
+    translation_model: str = Form('gpt-4o-mini'),
+    translation_languages: list[str] = Form([]),
+):
+    from portal.database import get_session, get_booth_by_id, get_event_by_id
+    from portal.models import BoothTranslationLanguage
+    from portal.translations.constants import TranslationProviderEnum
+    from portal.transcription.constants import ALLOWED_MODELS
+    import pycountry
+
+    async with get_session() as session:
+        db_booth = await get_booth_by_id(session, booth_id)
+        if db_booth is None or db_booth.room_id != room_id:
+            raise HTTPException(status_code=404, detail='Booth not found.')
+            
+        event = await get_event_by_id(session, event_id)
+        if event is None:
+            raise HTTPException(status_code=404, detail='Event not found.')
+            
+        try:
+            provider_enum = TranslationProviderEnum(translation_provider)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid translation provider")
+            
+        db_booth.translation_enabled = translation_enabled
+        db_booth.translation_provider = translation_provider
+        db_booth.translation_model = translation_model
+        
+        # Update target languages
+        current_langs = {lang.language_code: lang for lang in db_booth.translation_languages}
+        
+        # Add new ones or re-enable
+        for code in translation_languages:
+            if code in current_langs:
+                current_langs[code].enabled = True
+            else:
+                lang_obj = pycountry.languages.get(alpha_2=code)
+                lang_name = lang_obj.name if lang_obj else code
+                db_booth.translation_languages.append(
+                    BoothTranslationLanguage(
+                        booth_id=db_booth.id,
+                        language_code=code,
+                        language_name=lang_name,
+                        enabled=True
+                    )
+                )
+                
+        # Disable unselected ones
+        for code, lang_model in current_langs.items():
+            if code not in translation_languages:
+                lang_model.enabled = False
+                
+        await session.commit()
+        
+    return safe_redirect(
+        url=f'/admin/events/{event_id}/rooms/{room_id}/booths/{booth_id}/',
         status_code=status.HTTP_303_SEE_OTHER,
     )
 
@@ -1588,7 +1943,7 @@ async def admin_transcription_settings(
                 
                 import asyncio
                 await asyncio.sleep(0.1)
-                await start_transcription_worker(event.slug, db_booth.language_code, bid, broadcast_transcription, transcription_provider, transcription_model, config)
+                await start_transcription_worker(event.slug, db_booth.language_code, bid, broadcast_transcription, transcription_provider, transcription_model, config, room_id=db_booth.room_id)
     return safe_redirect(
         url=f'/admin/events/{event_id}/rooms/{room_id}/booths/{booth_id}/',
         status_code=status.HTTP_303_SEE_OTHER,
@@ -1952,9 +2307,10 @@ async def api_transcription_start(
             
         from portal.transcription import ProviderConfig
         config = ProviderConfig(api_key=api_key)
+        room_id = db_booth.room_id
 
     try:
-        await start_transcription_worker(event_slug, language_code, booth_id, broadcast_transcription, provider, model_size, config)
+        await start_transcription_worker(event_slug, language_code, booth_id, broadcast_transcription, provider, model_size, config, room_id=room_id)
     except ValueError as e:
         raise HTTPException(status_code=429, detail=str(e))
     return {"status": "started", "provider": provider, "model": model_size}
@@ -1968,6 +2324,56 @@ async def api_transcription_stop(
     _require_access(credentials, token)
     await stop_transcription_worker(booth_id)
     return {"status": "stopped"}
+
+@app.get('/api/admin/events/{event_id}/rooms/{room_id}/transcripts/{language_code}')
+async def api_admin_get_transcripts(
+    event_id: int,
+    room_id: int,
+    language_code: str,
+    target_lang: str = Query(None),
+    admin: bool = Depends(require_admin)
+):
+    from portal.database import get_session
+    from portal.models import TranscriptSegment, TranscriptTranslation
+    from sqlalchemy import select
+    from sqlalchemy.orm import joinedload
+
+    async with get_session() as session:
+        if target_lang:
+            stmt = select(TranscriptTranslation).join(TranscriptSegment).where(
+                TranscriptSegment.room_id == room_id,
+                TranscriptSegment.language_code == language_code,
+                TranscriptTranslation.language_code == target_lang
+            ).order_by(TranscriptSegment.created_at)
+            
+            result = await session.execute(stmt)
+            translations = result.scalars().all()
+            
+            return [
+                {
+                    "id": t.id,
+                    "text": t.text,
+                    "created_at": t.created_at.isoformat()
+                }
+                for t in translations
+            ]
+        else:
+            stmt = select(TranscriptSegment).where(
+                TranscriptSegment.room_id == room_id,
+                TranscriptSegment.language_code == language_code
+            ).order_by(TranscriptSegment.created_at)
+            
+            result = await session.execute(stmt)
+            segments = result.scalars().all()
+            
+            return [
+                {
+                    "id": s.id,
+                    "text": s.text,
+                    "created_at": s.created_at.isoformat()
+                }
+                for s in segments
+            ]
 
 
 def main() -> None:

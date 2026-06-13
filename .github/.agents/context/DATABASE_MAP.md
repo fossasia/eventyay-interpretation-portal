@@ -132,6 +132,48 @@ Unique on `(user_id, booth_id)`.
 
 ---
 
+### `transcript_segments`
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | Integer PK | — |
+| `event_id` | FK → events.id CASCADE | — |
+| `channel_id` | String(100) | `floor-{room_id}` or `{booth_id}` |
+| `text` | Text | The final canonical transcription text |
+| `start_time` | Float | Timestamp from audio stream |
+| `end_time` | Float | Timestamp from audio stream |
+| `created_at` | DateTime(tz) | UTC |
+
+---
+
+### `transcript_translations`
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | Integer PK | — |
+| `segment_id` | FK → transcript_segments.id CASCADE | Links translation directly to canonical transcript |
+| `language_code` | String(20) | ISO 639-1 target language |
+| `text` | Text | The translated text |
+| `created_at` | DateTime(tz) | UTC |
+
+Unique index on `(segment_id, language_code)`.
+
+---
+
+### `room_translation_languages` & `booth_translation_languages`
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | Integer PK | — |
+| `room_id` / `booth_id` | FK CASCADE | Target entity |
+| `language_code` | String(20) | ISO 639-1 target language |
+| `language_name` | String(100) | Human readable |
+| `enabled` | Boolean | Default True |
+
+Tracks which languages the translation worker should generate for a given room or booth.
+
+---
+
 ## Alembic Migration Chain
 
 | ID | File | What it adds |
@@ -144,6 +186,10 @@ Unique on `(user_id, booth_id)`.
 | 006 | `006_add_relay_booth_id_to_room.py` | `rooms.relay_booth_id` FK |
 | 007 | `007_add_transcription_config.py` | `booths.transcription_enabled`, `booths.transcription_model` |
 | 008 | `008_add_and_encrypt_api_keys.py` | `booths.transcription_provider`, `events.{openai,deepgram,nvidia,elevenlabs}_api_key`, `events.transcription_api_enabled` |
+| 009 | `009_add_floor_transcription.py` | `rooms.floor_transcription_enabled`, `rooms.floor_language_code`, `rooms.floor_transcription_provider`, `rooms.floor_transcription_model` |
+| 010 | `010_add_transcriptsegment_model.py` | `transcript_segments` table |
+| 011 | `011_add_translation_models.py` | `transcript_translations`, `room_translation_languages` tables, translation API keys in `events`, floor translation settings in `rooms` |
+| 012 | `012_add_booth_translation_settings.py` | `booth_translation_languages` table, `booths.translation_enabled/provider/model` |
 
 Run migrations: `uv run alembic upgrade head`
 

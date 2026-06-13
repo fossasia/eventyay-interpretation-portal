@@ -6,6 +6,9 @@
 
 ## Architecture Overview
 
+There are two primary audio capture pathways: **Booth Audio** (interpreters) and **Floor Audio** (the main conference).
+
+### 1. Booth Audio Pipeline
 ```
 Active interpreter Go Live
         │
@@ -14,24 +17,46 @@ Active interpreter Go Live
    rtsp://mediamtx:8554/{event_slug}/{language_code}
         │
         ▼
-   ffmpeg (spawned by worker.py)
+   ffmpeg (spawned by transcription worker)
    -rtsp_transport tcp → PCM s16le 16kHz mono → stdout pipe
+```
+
+### 2. Floor Audio Pipeline
+```
+Jitsi Meet Floor Conference
+        │
+        ▼
+   floor-bot (Headless Chromium)
+   Joins as "VoxBento FloorBot", captures audio via PulseAudio
+        │
+        ▼
+   ffmpeg (spawned by floor-bot)
+   Encodes to Opus → RTSP tcp push to MediaMTX:8554/{event_slug}/floor
+```
+
+### 3. Transcription & Translation Flow
+```
+   RTSP Stream (Floor or Booth)
         │
         ▼
    TranscriptionProvider.run_stream()
-   (3-second chunks, queue depth 2, drop on overflow)
         │
         ▼
    CaptionAggregator (aggregator.py)
    partial / final / chunk events
+        ├───────────────────────────────────────────────────────┐
+        ▼                                                       ▼
+   Database (TranscriptSegment)                            broadcast_transcription()
+        │                                                  (WebSocket /ws/captions)
+        ▼
+   Translation Worker (translations/worker.py)
+   Reads 'final' segments → _translate_and_broadcast()
         │
         ▼
-   broadcast_transcription() in fastapi_app.py
+   Database (TranscriptSegment target_language)
         │
-   ┌────┴────┐
-   ▼         ▼
-/ws/booth  /ws/captions
- (interpreters)  (listeners)
+        ▼
+   broadcast_translation() (WebSocket /ws/translations)
 ```
 
 ---
@@ -50,6 +75,8 @@ Active interpreter Go Live
 | `portal/transcription/providers/deepgram.py` | `DeepgramProvider` — nova-2 WebSocket streaming |
 | `portal/transcription/providers/nvidia.py` | `NVIDIAProvider` — Parakeet-RNNT/CTC via Riva gRPC |
 | `portal/transcription/providers/elevenlabs.py` | `ElevenLabsProvider` — scribe_v2 |
+| `portal/translations/worker.py` | `start_translation_worker()`, LLM translation loop, multithreaded translation dispatch |
+| `portal/translations/constants.py` | Translation models enum mapped to Anthropic, OpenAI, Groq, Gemini, etc. |
 
 ---
 

@@ -10,7 +10,7 @@ class NVIDIAProvider(TranscriptionProvider):
     async def process_chunk(self, chunk: bytes, language_code: str, model_variant: str, config: ProviderConfig, booth_state: BoothTranscriptionState | None = None) -> str:
         return ""
 
-    async def run_stream(self, process: asyncio.subprocess.Process, language_code: str, model_variant: str, config: ProviderConfig, broadcast_callback, booth_id: str) -> None:
+    async def run_stream(self, process: asyncio.subprocess.Process, language_code: str, model_variant: str, config: ProviderConfig, broadcast_callback, booth_id: str, room_id: int | None = None) -> None:
         try:
             import riva.client as rc
         except ImportError:
@@ -52,7 +52,7 @@ class NVIDIAProvider(TranscriptionProvider):
         )
         
         from portal.transcription.aggregator import CaptionAggregator
-        aggregator = CaptionAggregator(broadcast_callback)
+        aggregator = CaptionAggregator(broadcast_callback, room_id=room_id)
         
         streaming_config = rc.StreamingRecognitionConfig(
             config=config_rc,
