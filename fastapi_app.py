@@ -325,7 +325,7 @@ async def join_via_invite(token: str) -> RedirectResponse:
     if tok.role == 'listener':
         redirect_url = f'/listener/{tok.booth.event.slug}'
     else:
-        redirect_url = f'/interpreter/{tok.booth.event.slug}/{tok.booth.language_code}'
+        redirect_url = '/interpreter'
         
     response = RedirectResponse(url=redirect_url, status_code=status.HTTP_303_SEE_OTHER)
     response.set_cookie(
@@ -421,6 +421,78 @@ async def healthz() -> dict:
         'server': 'fastapi',
         'mediamtx_ok': await _check_mediamtx(),
     }
+
+
+@app.get('/interpreter')
+async def interpreter_landing_page(request: Request) -> Any:
+    """Central lobby for interpreters to run pre-flight checks and view assigned booths."""
+    from portal.database import get_session, list_booth_memberships_for_user
+
+    payload = get_booth_session(request)
+    if payload is None:
+        return safe_redirect(url='/login?next=/interpreter', status_code=status.HTTP_303_SEE_OTHER)
+
+    my_booths = []
+
+    # If they joined via an invite link, the payload contains the specific event/language.
+    if 'event_slug' in payload and 'language_code' in payload:
+        bid = make_booth_id(payload['event_slug'], payload['language_code'])
+        mem_booth = booths.get_booth_sync(bid)
+        is_live = mem_booth is not None and mem_booth.ingest_status == 'connected'
+        
+        # We need the event name and language name. We can query the DB.
+        async with get_session() as session:
+            from portal.models import Event, DBBooth
+            from sqlalchemy.orm import joinedload
+            from sqlalchemy import select
+            
+            # Simple query to get names for the UI
+            stmt = select(DBBooth).options(joinedload(DBBooth.event), joinedload(DBBooth.room)).join(Event).where(Event.slug == payload['event_slug'], DBBooth.language_code == payload['language_code'])
+            res = await session.execute(stmt)
+            b = res.scalar_one_or_none()
+            
+            event_name = b.event.display_name if b and b.event else payload['event_slug']
+            language_name = b.language_name if b else payload['language_code']
+            room_name = b.room.display_name if b and b.room else ''
+            
+        my_booths.append({
+            'booth_id': bid,
+            'is_live': is_live,
+            'event_name': event_name,
+            'language_name': language_name,
+            'room_name': room_name,
+            'event_slug': payload['event_slug'],
+            'language_code': payload['language_code'],
+            'role': payload.get('role', 'interpreter'),
+        })
+
+    # If they logged in as a user, fetch all their assigned booths.
+    elif payload.get('sub') and payload.get('user'):
+        try:
+            uid = int(payload['sub'])
+            async with get_session() as session:
+                bms = await list_booth_memberships_for_user(session, uid)
+                for bm in bms:
+                    bid = make_booth_id(bm.booth.event.slug, bm.booth.language_code)
+                    mem_booth = booths.get_booth_sync(bid)
+                    is_live = mem_booth is not None and mem_booth.ingest_status == 'connected'
+                    my_booths.append({
+                        'booth_id': bid,
+                        'is_live': is_live,
+                        'event_name': bm.booth.event.display_name,
+                        'language_name': bm.booth.language_name,
+                        'room_name': bm.booth.room.display_name if bm.booth.room else '',
+                        'event_slug': bm.booth.event.slug,
+                        'language_code': bm.booth.language_code,
+                        'role': bm.role,
+                    })
+        except ValueError:
+            pass
+
+    return templates.TemplateResponse(request, 'interpreter_landing.html', {
+        'my_booths': my_booths,
+        'js_version': _JS_CACHE_BUST,
+    })
 
 
 @app.get('/interpreter/{event_slug}/{language_code}')

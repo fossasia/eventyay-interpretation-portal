@@ -77,6 +77,10 @@ const elements = {
   micMeter: document.getElementById('mic-meter'),
   meterRow: document.getElementById('meter-row'),
   micTestBtn: document.getElementById('mic-test-btn'),
+  loopbackTestBtn: document.getElementById('loopback-test-btn'),
+  loopbackProgressRow: document.getElementById('loopback-progress-row'),
+  loopbackProgress: document.getElementById('loopback-progress'),
+  loopbackStatus: document.getElementById('loopback-status'),
   listenerUrlRow: document.getElementById('listener-url-row'),
   listenerUrlDisplay: document.getElementById('listener-url-display'),
   copyListenerUrl: document.getElementById('copy-listener-url'),
@@ -90,6 +94,8 @@ let micTestStream = null
 let micAnimFrame = null
 let micAudioCtx = null
 let micAnalyser = null
+let loopbackRecorder = null
+let loopbackAudio = null
 
 
 boot().catch((error) => {
@@ -313,6 +319,16 @@ function bindEventHandlers() {
       await startMicTest()
     }
   })
+
+  if (elements.loopbackTestBtn) {
+    elements.loopbackTestBtn.addEventListener('click', async () => {
+      if (loopbackRecorder || loopbackAudio) {
+        stopLoopbackTest()
+      } else {
+        await startLoopbackTest()
+      }
+    })
+  }
 
   if (elements.copyListenerUrl) {
     elements.copyListenerUrl.addEventListener('click', () => {
@@ -864,6 +880,98 @@ function stopMicMeter() {
     ctx.clearRect(0, 0, canvas.width, canvas.height)
   }
   elements.meterRow.classList.add('hidden')
+}
+
+// ── Loopback Test ─────────────────────────────────────────────────────────────
+
+async function startLoopbackTest() {
+  if (loopbackRecorder || loopbackAudio) stopLoopbackTest()
+  try {
+    const deviceId = state.micDeviceId
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        deviceId: deviceId ? { exact: deviceId } : undefined,
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+    })
+    
+    elements.loopbackTestBtn.textContent = '⏹ Stop Test'
+    elements.loopbackTestBtn.classList.add('btn-primary')
+    elements.loopbackProgressRow.classList.remove('hidden')
+    elements.loopbackStatus.textContent = 'Recording...'
+    elements.loopbackProgress.value = 0
+    
+    const chunks = []
+    loopbackRecorder = new MediaRecorder(stream)
+    loopbackRecorder.ondataavailable = (e) => chunks.push(e.data)
+    
+    const startTime = Date.now()
+    const durationMs = 5000
+    
+    const progressInterval = setInterval(() => {
+      const elapsed = Date.now() - startTime
+      const pct = Math.min(100, (elapsed / durationMs) * 100)
+      elements.loopbackProgress.value = pct
+    }, 50)
+    
+    loopbackRecorder.onstop = () => {
+      clearInterval(progressInterval)
+      stream.getTracks().forEach(t => t.stop())
+      if (!elements.loopbackTestBtn.classList.contains('btn-primary')) return // Was stopped manually
+      
+      const blob = new Blob(chunks, { type: 'audio/webm' })
+      const url = URL.createObjectURL(blob)
+      loopbackAudio = new Audio(url)
+      
+      elements.loopbackStatus.textContent = 'Playing...'
+      elements.loopbackProgress.value = 0
+      
+      loopbackAudio.onended = () => {
+        stopLoopbackTest()
+      }
+      
+      loopbackAudio.ontimeupdate = () => {
+        if (!loopbackAudio) return
+        const pct = (loopbackAudio.currentTime / loopbackAudio.duration) * 100
+        elements.loopbackProgress.value = pct
+      }
+      
+      loopbackAudio.play().catch(e => {
+        showError(`Failed to play loopback audio: ${e.message}`)
+        stopLoopbackTest()
+      })
+    }
+    
+    loopbackRecorder.start()
+    setTimeout(() => {
+      if (loopbackRecorder && loopbackRecorder.state === 'recording') {
+        loopbackRecorder.stop()
+      }
+    }, durationMs)
+    
+  } catch (error) {
+    showError(`Cannot access microphone: ${error.message}`)
+    stopLoopbackTest()
+  }
+}
+
+function stopLoopbackTest() {
+  if (loopbackRecorder && loopbackRecorder.state !== 'inactive') {
+    loopbackRecorder.stop()
+  }
+  loopbackRecorder = null
+  
+  if (loopbackAudio) {
+    loopbackAudio.pause()
+    loopbackAudio.src = ''
+    loopbackAudio = null
+  }
+  
+  elements.loopbackTestBtn.textContent = '🎙️ Record & Play'
+  elements.loopbackTestBtn.classList.remove('btn-primary')
+  elements.loopbackProgressRow.classList.add('hidden')
 }
 
 async function toggleMicMute() {

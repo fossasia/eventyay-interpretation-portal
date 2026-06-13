@@ -473,7 +473,7 @@ async def list_memberships_for_booth(session: AsyncSession, booth_id: int) -> li
 async def list_booth_memberships_for_user(session: AsyncSession, user_id: int) -> list[BoothMembership]:
     result = await session.execute(
         select(BoothMembership)
-        .options(joinedload(BoothMembership.booth).joinedload(DBBooth.event))
+        .options(joinedload(BoothMembership.booth).joinedload(DBBooth.event), joinedload(BoothMembership.booth).joinedload(DBBooth.room))
         .where(BoothMembership.user_id == user_id)
         .order_by(BoothMembership.created_at),
     )
