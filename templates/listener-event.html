@@ -130,7 +130,7 @@
 {% endblock %}
 {% block content %}
 <div class="listener-container">
-  <h1>🎧 Listen: {{ event.display_name }}</h1>
+  <h1>Listen: {{ event.display_name }}</h1>
   
   <div class="selectors-container">
     <div class="selector-group">
@@ -392,6 +392,18 @@
                 tHistoryBox.appendChild(p);
                 while (tHistoryBox.children.length > 50) tHistoryBox.removeChild(tHistoryBox.firstChild);
                 captionsBox.scrollTop = captionsBox.scrollHeight;
+              }
+            } else if (data.type === 'booth:state') {
+              if (data.state && data.state.broadcast_unlocked === false) {
+                WhepListener.stop();
+                setStatus('Broadcast is currently locked by the organizers.', 'error');
+                roomSelect.value = "";
+                languageSelect.innerHTML = '<option value="">-- Select Language --</option>';
+                languageSelect.disabled = true;
+                captionModeSelect.disabled = true;
+                captionModeSelect.value = 'original';
+                translationLangSelect.innerHTML = '';
+                updateCaptionLayout();
               }
             }
           } catch (e) {

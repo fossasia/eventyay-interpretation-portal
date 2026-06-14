@@ -10,12 +10,14 @@
 ```
 events (1)
   └── rooms (n)  ─── relay_booth_id → booths.id (nullable FK, SET NULL)
+        └── room_memberships (n) ─── user_id → users.id
   └── booths (n)
         └── invite_tokens (n)
         └── booth_memberships (n) ─── user_id → users.id
 
 users (1)
   └── event_memberships (n) ─── event_id → events.id
+  └── room_memberships (n) ─── room_id → rooms.id
   └── booth_memberships (n) ─── booth_id → booths.id
 ```
 
@@ -30,6 +32,7 @@ users (1)
 | `id` | Integer PK | — |
 | `slug` | String(64) UNIQUE | validated: lowercase alphanumeric + hyphens; used in URLs and booth identity |
 | `display_name` | String(200) | — |
+| `listener_join_code` | String(64) nullable | Unique code for listener portal access |
 | `transcription_api_enabled` | Boolean | Default False; guards use of external transcription APIs |
 | `openai_api_key` | Text nullable | Fernet-encrypted via `portal.crypto.encrypt_val` |
 | `deepgram_api_key` | Text nullable | Fernet-encrypted |
@@ -67,6 +70,7 @@ Cascade: deletes rooms + booths when event is deleted.
 | `transcription_enabled` | Boolean | Default False |
 | `transcription_provider` | String(20) | Default `'local'`; validated against `ProviderEnum` |
 | `transcription_model` | String(20) | Default `'tiny'`; validated against `ALLOWED_MODELS` |
+| `broadcast_unlocked` | Boolean | Default False; allows unauthenticated ingest |
 | `created_at` | DateTime(tz) | UTC |
 
 Unique index on `(event_id, language_code)` — one booth per language per event.
@@ -113,9 +117,22 @@ Properties: `is_expired` (compares UTC), `is_used` (used_at is not None).
 | `id` | Integer PK | — |
 | `user_id` | FK → users.id CASCADE | — |
 | `event_id` | FK → events.id CASCADE | — |
-| `role` | String(20) | e.g. `event_admin`, `coordinator`, `interpreter`, `listener` |
+| `role` | String(20) | e.g. `event_owner` |
 
 Unique on `(user_id, event_id)` — one role per user per event.
+
+---
+
+### `room_memberships`
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | Integer PK | — |
+| `user_id` | FK → users.id CASCADE | — |
+| `room_id` | FK → rooms.id CASCADE | — |
+| `role` | String(20) | e.g. `room_coordinator` |
+
+Unique on `(user_id, room_id)`.
 
 ---
 
@@ -126,7 +143,7 @@ Unique on `(user_id, event_id)` — one role per user per event.
 | `id` | Integer PK | — |
 | `user_id` | FK → users.id CASCADE | — |
 | `booth_id` | FK → booths.id CASCADE | — |
-| `role` | String(20) | e.g. `interpreter`, `coordinator` |
+| `role` | String(20) | e.g. `interpreter` |
 
 Unique on `(user_id, booth_id)`.
 
@@ -190,6 +207,8 @@ Tracks which languages the translation worker should generate for a given room o
 | 010 | `010_add_transcriptsegment_model.py` | `transcript_segments` table |
 | 011 | `011_add_translation_models.py` | `transcript_translations`, `room_translation_languages` tables, translation API keys in `events`, floor translation settings in `rooms` |
 | 012 | `012_add_booth_translation_settings.py` | `booth_translation_languages` table, `booths.translation_enabled/provider/model` |
+| 013 | `013_add_broadcast_unlocked_to_booths.py` | `booths.broadcast_unlocked` column |
+| 014 | `014_rbac_refactor.py` | `room_memberships` table, `events.listener_join_code` |
 
 Run migrations: `uv run alembic upgrade head`
 
@@ -205,6 +224,7 @@ Run migrations: `uv run alembic upgrade head`
 | `create_invite_token`, `get_invite_token`, `redeem_invite_token`, `list_tokens_for_booth`, `revoke_invite_token` | invite_tokens | `redeem_invite_token` raises ValueError on used/expired |
 | `create_user`, `get_user_by_email`, `get_user_by_id`, `list_users`, `update_user_active`, `delete_user` | users | — |
 | `set_event_membership`, `remove_event_membership`, `list_memberships_for_user`, `list_memberships_for_event` | event_memberships | upsert pattern |
+| `set_room_membership`, `remove_room_membership`, `list_memberships_for_room`, `list_room_memberships_for_user` | room_memberships | upsert pattern |
 | `set_booth_membership`, `remove_booth_membership`, `list_memberships_for_booth`, `list_booth_memberships_for_user` | booth_memberships | upsert pattern |
 
 ### Session Pattern
