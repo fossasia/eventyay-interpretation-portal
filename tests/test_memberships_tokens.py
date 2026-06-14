@@ -110,7 +110,7 @@ class TestEventMembershipDB:
             memberships = await list_memberships_for_event(s, event.id)
         assert len(memberships) == 2
         roles = {m.role for m in memberships}
-        assert roles == {'interpreter'}
+        assert roles == {'interpreter', 'room_coordinator'}
 
     @pytest.mark.anyio
     async def test_list_memberships_for_user(self, setup_db):

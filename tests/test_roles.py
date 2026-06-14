@@ -126,8 +126,8 @@ def test_can_set_active_denied(role: ParticipantRole):
 # ── can_manage_booths ────────────────────────────────────────────────────
 
 
-ROLES_THAT_CAN_MANAGE_BOOTHS = {'event_owner', 'super_admin', 'room_coordinator'}
-ROLES_THAT_CANNOT_MANAGE_BOOTHS = {'interpreter'}
+ROLES_THAT_CAN_MANAGE_BOOTHS = {'event_owner', 'super_admin'}
+ROLES_THAT_CANNOT_MANAGE_BOOTHS = {'interpreter', 'room_coordinator'}
 
 
 @pytest.mark.parametrize('role', list(ROLES_THAT_CAN_MANAGE_BOOTHS))
@@ -155,12 +155,12 @@ def test_can_manage_events_denied(role: ParticipantRole):
 # ── is_admin_role ────────────────────────────────────────────────────────
 
 
-@pytest.mark.parametrize('role', ['super_admin', 'event_owner', 'room_coordinator'])
+@pytest.mark.parametrize('role', ['super_admin', 'event_owner'])
 def test_is_admin_role_true(role: ParticipantRole):
     assert is_admin_role(role) is True
 
 
-@pytest.mark.parametrize('role', ['interpreter'])
+@pytest.mark.parametrize('role', ['interpreter', 'room_coordinator'])
 def test_is_admin_role_false(role: ParticipantRole):
     assert is_admin_role(role) is False
 

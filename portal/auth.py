@@ -196,6 +196,18 @@ async def get_admin_flags(request: Request, event_id: int | None = None, room_id
                                 flags['is_room_coordinator'] = True
         except jwt.InvalidTokenError:
             pass
+
+    admin_cookie = request.cookies.get('admin_token', '')
+    if admin_cookie:
+        try:
+            payload = decode_token(admin_cookie)
+            if payload.get('admin'):
+                flags['is_super_admin'] = True
+                flags['is_event_owner'] = True
+                flags['is_room_coordinator'] = True
+        except jwt.InvalidTokenError:
+            pass
+
     return flags
 
 
