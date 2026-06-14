@@ -92,7 +92,7 @@ class TestEventMembershipDB:
         user = await _create_test_user()
         event, _, _ = await _seed_event_room_booth()
         async with get_session() as s:
-            await set_event_membership(s, user_id=user.id, event_id=event.id, role=)
+            await set_event_membership(s, user_id=user.id, event_id=event.id, role='room_coordinator')
         async with get_session() as s:
             m = await set_event_membership(s, user_id=user.id, event_id=event.id, role='room_coordinator')
         assert m.role == 'room_coordinator'
@@ -105,7 +105,7 @@ class TestEventMembershipDB:
         event, _, _ = await _seed_event_room_booth()
         async with get_session() as s:
             await set_event_membership(s, user_id=u1.id, event_id=event.id, role='interpreter')
-            await set_event_membership(s, user_id=u2.id, event_id=event.id, role=)
+            await set_event_membership(s, user_id=u2.id, event_id=event.id, role='room_coordinator')
         async with get_session() as s:
             memberships = await list_memberships_for_event(s, event.id)
         assert len(memberships) == 2
@@ -225,7 +225,7 @@ class TestTokenDB:
         _, _, booth = await _seed_event_room_booth()
         async with get_session() as s:
             await create_invite_token(s, booth_id=booth.id, role='interpreter', label='T1')
-            await create_invite_token(s, booth_id=booth.id, role=label='T2')
+            await create_invite_token(s, booth_id=booth.id, role='room_coordinator', label='T2')
         async with get_session() as s:
             tokens = await list_tokens_for_booth(s, booth.id)
         assert len(tokens) == 2
@@ -365,7 +365,7 @@ class TestAdminTokenRoutes:
         async with _client() as c:
             resp = await c.post(
                 f'/admin/events/{event.id}/rooms/{room.id}/booths/{booth.id}/tokens/',
-                data={'role': 'label': 'Bob', 'expires_hours': '24'},
+                data={'role': 'interpreter', 'label': 'Bob', 'expires_hours': '24'},
                 cookies=admin_cookie,
                 follow_redirects=False,
             )

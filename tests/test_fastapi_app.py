@@ -760,11 +760,11 @@ def test_interpreter_booth_by_identity_no_role_returns_403():
     assert res.status_code == 403
 
 
-def test_interpreter_booth_admin_user_gets_event_admin_role():
-    """A user with is_admin=True gets event_admin role without needing a membership."""
+def test_interpreter_booth_admin_user_gets_super_admin_role():
+    """A user with is_admin=True gets super_admin role without needing a membership."""
     res = client.get('/interpreter/myevent/en', cookies=_admin_user_cookie())
     assert res.status_code == 200
-    assert b"data-granted-role='event_owner'" in res.content
+    assert b"data-granted-role='super_admin'" in res.content
 
 
 def test_legacy_interpreter_booth_requires_auth():

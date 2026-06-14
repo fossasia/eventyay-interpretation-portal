@@ -20,6 +20,9 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from portal.auth import create_admin_token, decode_token
+from portal.config import settings
+
+settings.admin_password = 'test-admin-pass'
 
 
 # ---------------------------------------------------------------------------

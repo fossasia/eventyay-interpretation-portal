@@ -1412,6 +1412,8 @@ async def admin_dashboard(request: Request):
             allowed_event_ids.update({rm.room.event_id for rm in rms})
             
             events = [e for e in events if e.id in allowed_event_ids]
+            if len(events) == 1:
+                return safe_redirect(url=f'/admin/events/{events[0].id}/', status_code=status.HTTP_303_SEE_OTHER)
 
         event_data = []
         for ev in events:

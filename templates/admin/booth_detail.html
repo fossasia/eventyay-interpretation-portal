@@ -329,7 +329,7 @@
           {% endif %}
         </td>
         <td><span class="badge badge-role badge-{{ p.role }}">{{ p.role }}</span></td>
-        <td>{{ '🎙️ On' if p.mic_active else '🔇 Off' }}</td>
+        <td>{{ 'On' if p.mic_active else 'Off' }}</td>
         <td>{{ '📡 Connected' if p.ingest_connected else '—' }}</td>
         <td>{{ p.joined_at if p.joined_at else '—' }}</td>
       </tr>

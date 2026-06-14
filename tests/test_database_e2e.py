@@ -222,7 +222,7 @@ async def test_cascade_delete_event_removes_everything(db: AsyncSession):
         db, event_id=ev.id, room_id=room.id,
         language_code='en', language_name='English',
     )
-    tok = await create_invite_token(db, booth_id=booth.id, role=)
+    tok = await create_invite_token(db, booth_id=booth.id, role='interpreter')
 
     # Delete the event
     assert await delete_event(db, ev.id) is True

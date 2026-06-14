@@ -133,7 +133,7 @@ class TestTokenRedemption:
     @pytest.mark.anyio
     async def test_redeem_sets_used_at(self, db, sample_booth):
         booth, _ = sample_booth
-        tok = await create_invite_token(db, booth_id=booth.id, role=)
+        tok = await create_invite_token(db, booth_id=booth.id, role='interpreter')
         before = utc_now()
         redeemed = await redeem_invite_token(db, tok.token)
         assert redeemed.used_at is not None
@@ -174,7 +174,7 @@ class TestTokenRedemption:
         booth, _ = sample_booth
         future = datetime.now(tz=timezone.utc) + timedelta(hours=24)
         tok = await create_invite_token(
-            db, booth_id=booth.id, role=expires_at=future,
+            db, booth_id=booth.id, role='interpreter', expires_at=future,
         )
         redeemed = await redeem_invite_token(db, tok.token)
         assert redeemed is not None

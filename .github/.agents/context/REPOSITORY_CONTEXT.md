@@ -77,14 +77,14 @@ rtsp_url   = rtsp://mediamtx:8554/{mtx_path}    (transcription use)
 ## Role Hierarchy
 
 ```
-super_admin > event_owner > room_room_coordinator > interpreter
+super_admin > event_owner > room_coordinator > interpreter
 ```
 
 | Role | Go Live | Set Active | Chat | Manage Booths | Manage Events |
 |---|---|---|---|---|---|
 | super_admin | ✓ | ✓ | ✓ | ✓ | ✓ |
 | event_owner | ✓ | ✓ | ✓ | ✓ | — |
-| room_room_coordinator | ✓ | ✓ | ✓ | — | — |
+| room_coordinator | ✓ | ✓ | ✓ | — | — |
 | interpreter | ✓ | — | ✓ | — | — |
 
 Defined in: `portal/roles.py` (`Permission` enum, `ROLE_PERMISSIONS` dict)
@@ -113,7 +113,7 @@ Client → Server messages:
 | `booth:join` | `_handle_join` | Adds participant; first interpreter auto-assigned active |
 | `booth:leave` | `_handle_leave` | Removes participant; triggers handoff if active leaves |
 | `booth:chat` | `_handle_chat` | Appends message; broadcasts `booth:chat` + `booth:state` |
-| `booth:set-active` | `_handle_set_active` | Changes active interpreter (room_room_coordinator/current-active only) |
+| `booth:set-active` | `_handle_set_active` | Changes active interpreter (room_coordinator/current-active only) |
 | `booth:update-state` | `_handle_update_state` | Updates mic_active / ingest_connected flags |
 
 Server → Client broadcasts: `booth:joined`, `booth:state`, `booth:chat`, `booth:error`
